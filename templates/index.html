@@ -1707,7 +1707,7 @@ function buildConfigFromForm() {
     simulation: {
       friction_model: document.getElementById('p-sim-friction').value,
       mesh_cell_size_m: parseInt(document.getElementById('p-sim-mesh').value),
-      t_end_s: parseInt(document.getElementById('p-sim-tend').value),
+      t_end_s: parseInt(document.getElementById('p-sim-tend').value) || 400,
       snow_density: parseInt(document.getElementById('p-sim-rho').value) || 200,
       res_type: document.getElementById('p-sim-res').value,
     },

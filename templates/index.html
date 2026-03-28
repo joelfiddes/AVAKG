@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AvaFrame Web UI</title>
-  <meta name="base-path" content="{{ config.get('APPLICATION_ROOT', '') }}">
+  <meta name="base-path" content="">
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
   <style>
@@ -352,7 +352,7 @@
 
     <div class="sidebar-footer">
       <a href="https://mountainfutures.ch" target="_blank">
-        <img src="{{ config.get('APPLICATION_ROOT', '') }}/static/mf_logo.svg"
+        <img src="static/mf_logo.svg"
              alt="Mountain Futures" onerror="this.style.display='none'">
       </a>
     </div>
@@ -999,7 +999,15 @@
 // ============================================================
 // Base path (for reverse proxy subpath deployment)
 // ============================================================
-const BASE = document.querySelector('meta[name="base-path"]')?.content || '';
+// Auto-detect base path from current URL (works behind reverse proxy subpaths)
+const BASE = (() => {
+  const path = window.location.pathname;
+  // If served at /avaframe/, API calls need /avaframe prefix
+  // Detect by checking if path starts with a known prefix before the app routes
+  const match = path.match(/^(\/[^\/]+)\//);
+  if (match && match[1] !== '/api' && match[1] !== '/static') return match[1];
+  return '';
+})();
 function api(path) { return BASE + path; }
 
 // ============================================================

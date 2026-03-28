@@ -453,6 +453,11 @@
           <div class="tab active" onclick="showPipelineTab('general', this)">General Config</div>
           <div class="tab" onclick="showPipelineTab('avaframe', this)">AvaFrame Config</div>
           <div class="tab" onclick="showPipelineTab('yaml', this)">YAML (Advanced)</div>
+          <div style="margin-left: auto; padding: 4px;">
+            <button class="btn btn-outline btn-sm" onclick="loadDemo()">
+              <i class="fas fa-flask"></i> Load Demo
+            </button>
+          </div>
         </div>
 
         <!-- ===== GENERAL CONFIG TAB ===== -->
@@ -1802,6 +1807,41 @@ function uploadDemFile(file) {
       status.innerHTML = '<i class="fas fa-times-circle"></i> Upload failed';
       toast('Upload error: ' + e, 'error');
     });
+}
+
+function loadDemo() {
+  fetch(BASE + '/api/pipeline/demo')
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) { toast(data.error, 'error'); return; }
+      const cfg = data.config;
+      // Fill form fields
+      document.getElementById('p-project-name').value = cfg.project.name;
+      document.getElementById('p-project-dir').value = cfg.project.dir;
+      document.getElementById('p-domain-mode').value = 'from_dem';
+      toggleDomainMode();
+      document.getElementById('p-dem-source').value = 'local';
+      toggleDemSource();
+      document.getElementById('p-dem-path').value = cfg.dem.path;
+      document.getElementById('p-dem-res').value = cfg.dem.target_res_m;
+      document.getElementById('p-snow-source').value = 'fixed';
+      toggleSnowSource();
+      document.getElementById('p-snow-thickness').value = cfg.snow.thickness_m;
+      document.getElementById('p-rel-smin').value = cfg.release.slope_min_deg;
+      document.getElementById('p-rel-smax').value = cfg.release.slope_max_deg;
+      document.getElementById('p-rel-area').value = cfg.release.min_area_m2;
+      document.getElementById('p-rel-simp').value = cfg.release.simplify_tolerance_m;
+      document.getElementById('p-rel-erode').value = cfg.release.erode_cells;
+      document.getElementById('p-sim-friction').value = cfg.simulation.friction_model;
+      document.getElementById('p-sim-mesh').value = cfg.simulation.mesh_cell_size_m;
+      document.getElementById('p-sim-tend').value = cfg.simulation.t_end_s;
+      document.getElementById('p-sim-rho').value = cfg.simulation.snow_density;
+      document.getElementById('p-sim-res').value = cfg.simulation.res_type;
+      document.getElementById('p-dash-title').value = cfg.dashboard.title;
+      document.getElementById('p-dash-ds').value = cfg.dashboard.downsample;
+      toast('Demo loaded — KG Mining Site (5x5 km, 1 release area)', 'success');
+    })
+    .catch(e => toast('Error loading demo: ' + e, 'error'));
 }
 
 function loadPipelineTemplate() {

@@ -1,0 +1,36 @@
+# Demo — KG Mining Site, single large release area
+# Cropped DEM (5x5 km), 15m mesh, 200s — runs in a few minutes
+project:
+  name: demo_kg_mining
+  dir: ""  # auto-set by app
+
+domain:
+  from_dem: true
+
+dem:
+  source: local
+  path: ""  # auto-set to demo/Inputs/demo_dem.tif
+  target_res_m: 10
+
+snow:
+  source: fixed
+  thickness_m: 1.0
+
+release:
+  slope_min_deg: 28
+  slope_max_deg: 60
+  min_area_m2: 10000
+  simplify_tolerance_m: 10
+  erode_cells: 3
+
+simulation:
+  friction_model: samosATAuto
+  mesh_cell_size_m: 15
+  t_end_s: 200
+  res_type: "ppr|pft|pfv"
+  snow_density: 200
+
+dashboard:
+  generate: true
+  title: "Demo — KG Mining Site Avalanche Hazard"
+  downsample: 2

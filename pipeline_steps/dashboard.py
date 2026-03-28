@@ -10,6 +10,7 @@ import glob
 import io
 import json
 import math
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import geopandas as gpd
@@ -403,6 +404,8 @@ body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background
         </div>
     </div>
 
+    {kml_layers_sidebar}
+
     <div class="sidebar-section">
         <h3>Opacity</h3>
         <div class="slider-row">
@@ -581,6 +584,42 @@ function toggleSidebar() {{
     document.getElementById('sidebar').classList.toggle('collapsed');
 }}
 
+// --- KML custom layers ---
+var kmlLayersData = {kml_layers_js};
+var kmlLeafletLayers = [];
+kmlLayersData.forEach(function(layerDef, idx) {{
+    var geojson = JSON.parse(layerDef.geojson);
+    var style = layerDef.style || {{}};
+    var lyr = L.geoJSON(geojson, {{
+        style: function() {{ return style; }},
+        pointToLayer: function(feature, latlng) {{
+            return L.circleMarker(latlng, {{
+                radius: style.radius || 5,
+                color: style.color || '#e6194b',
+                weight: 2,
+                fillColor: style.fillColor || style.color || '#e6194b',
+                fillOpacity: style.fillOpacity || 0.15
+            }});
+        }},
+        onEachFeature: function(f, layer) {{
+            var parts = [];
+            if (f.properties.name) parts.push('<b>' + f.properties.name + '</b>');
+            if (f.properties.description) parts.push(f.properties.description);
+            if (parts.length) layer.bindPopup(parts.join('<br>'));
+        }}
+    }});
+    lyr.addTo(map);
+    kmlLeafletLayers.push(lyr);
+
+    var cb = document.querySelector('[data-kml-idx="' + idx + '"]');
+    if (cb) {{
+        cb.addEventListener('change', function() {{
+            if (this.checked) {{ lyr.addTo(map); }}
+            else {{ map.removeLayer(lyr); }}
+        }});
+    }}
+}});
+
 // --- Fit map to overlay bounds ---
 map.fitBounds(overlayBounds);
 showOverlays();
@@ -588,6 +627,149 @@ showOverlays();
 </body>
 </html>
 """
+
+
+# ---------------------------------------------------------------------------
+# KML parsing
+# ---------------------------------------------------------------------------
+
+_KML_PALETTE = [
+    "#e6194b", "#3cb44b", "#4363d8", "#f58231", "#911eb4",
+    "#42d4f4", "#f032e6", "#bfef45", "#fabed4", "#469990",
+    "#dcbeff", "#9A6324", "#800000", "#aaffc3", "#808000",
+    "#ffd8b1", "#000075", "#a9a9a9",
+]
+
+_KML_NS = "{http://www.opengis.net/kml/2.2}"
+
+
+def _parse_kml_to_geojson_layers(kml_dir: str, log_fn=print) -> list:
+    """Parse all KML files in a directory into GeoJSON layer dicts.
+
+    Each KML file becomes one or more layers. Features are grouped by
+    the folder/category they belong to in the KML structure.
+
+    Returns list of dicts: [{"name": str, "geojson": str, "color": str, "style": dict}, ...]
+    """
+    kml_path = Path(kml_dir)
+    if not kml_path.is_dir():
+        return []
+
+    kml_files = list(kml_path.glob("*.kml")) + list(kml_path.glob("*.KML"))
+    if not kml_files:
+        return []
+
+    layers = []
+    color_idx = 0
+
+    for kml_file in sorted(kml_files):
+        log_fn(f"[dashboard] Parsing KML: {kml_file.name}")
+        try:
+            tree = ET.parse(str(kml_file))
+        except ET.ParseError as e:
+            log_fn(f"[dashboard]   WARNING: Could not parse {kml_file.name}: {e}")
+            continue
+
+        root = tree.getroot()
+
+        # Collect placemarks grouped by parent folder name
+        groups = {}  # folder_name -> list of GeoJSON features
+
+        def _extract_coords(coord_text):
+            """Parse KML coordinate string into list of [lon, lat, alt]."""
+            coords = []
+            for chunk in coord_text.strip().split():
+                parts = chunk.split(",")
+                if len(parts) >= 2:
+                    lon = round(float(parts[0]), 5)
+                    lat = round(float(parts[1]), 5)
+                    coords.append([lon, lat])
+            return coords
+
+        def _placemark_to_feature(pm):
+            """Convert a KML Placemark element to a GeoJSON feature dict or None."""
+            name_el = pm.find(f"{_KML_NS}name")
+            desc_el = pm.find(f"{_KML_NS}description")
+            props = {}
+            if name_el is not None and name_el.text:
+                props["name"] = name_el.text
+            if desc_el is not None and desc_el.text:
+                props["description"] = desc_el.text[:200]
+
+            # Point
+            point = pm.find(f".//{_KML_NS}Point/{_KML_NS}coordinates")
+            if point is not None and point.text:
+                coords = _extract_coords(point.text)
+                if coords:
+                    return {"type": "Feature", "properties": props,
+                            "geometry": {"type": "Point", "coordinates": coords[0]}}
+
+            # LineString
+            line = pm.find(f".//{_KML_NS}LineString/{_KML_NS}coordinates")
+            if line is not None and line.text:
+                coords = _extract_coords(line.text)
+                if len(coords) >= 2:
+                    return {"type": "Feature", "properties": props,
+                            "geometry": {"type": "LineString", "coordinates": coords}}
+
+            # Polygon
+            poly = pm.find(f".//{_KML_NS}Polygon//{_KML_NS}outerBoundaryIs/{_KML_NS}LinearRing/{_KML_NS}coordinates")
+            if poly is not None and poly.text:
+                coords = _extract_coords(poly.text)
+                if len(coords) >= 3:
+                    return {"type": "Feature", "properties": props,
+                            "geometry": {"type": "Polygon", "coordinates": [coords]}}
+
+            return None
+
+        def _walk_element(el, folder_name=None):
+            """Recursively walk KML elements collecting placemarks by folder."""
+            tag = el.tag.replace(_KML_NS, "")
+            if tag == "Folder":
+                name_el = el.find(f"{_KML_NS}name")
+                folder_name = name_el.text if (name_el is not None and name_el.text) else folder_name
+
+            if tag == "Placemark":
+                feat = _placemark_to_feature(el)
+                if feat is not None:
+                    group_key = folder_name or kml_file.stem
+                    groups.setdefault(group_key, []).append(feat)
+                return
+
+            for child in el:
+                _walk_element(child, folder_name)
+
+        _walk_element(root)
+
+        # Convert groups to layers
+        for group_name, features in groups.items():
+            if len(features) > 10000:
+                log_fn(f"[dashboard]   Skipping '{group_name}' ({len(features)} features, too dense)")
+                continue
+
+            color = _KML_PALETTE[color_idx % len(_KML_PALETTE)]
+            color_idx += 1
+
+            geojson = json.dumps({
+                "type": "FeatureCollection",
+                "features": features,
+            })
+
+            layers.append({
+                "name": group_name,
+                "geojson": geojson,
+                "color": color,
+                "style": {
+                    "color": color,
+                    "weight": 2,
+                    "fillColor": color,
+                    "fillOpacity": 0.15,
+                    "radius": 5,
+                },
+            })
+
+    log_fn(f"[dashboard] Parsed {len(layers)} KML layer(s)")
+    return layers
 
 
 # ---------------------------------------------------------------------------
@@ -715,6 +897,35 @@ def generate_dashboard(cfg: dict, sim_results: dict, project_dir: str,
         rp_html = ""
 
     # ------------------------------------------------------------------
+    # 4b. Load KML overlays
+    # ------------------------------------------------------------------
+    kml_dir = project_dir / "Inputs" / "KML"
+    kml_layers = _parse_kml_to_geojson_layers(str(kml_dir), log_fn=log_fn)
+
+    # Build KML sidebar HTML and JS data
+    if kml_layers:
+        kml_sidebar_parts = [
+            '<div class="sidebar-section">',
+            '<h3>Custom Layers</h3>',
+        ]
+        for i, layer in enumerate(kml_layers):
+            lid = f"cb-kml-{i}"
+            kml_sidebar_parts.append(
+                f'<div class="layer-option">'
+                f'<input type="checkbox" id="{lid}" checked data-kml-idx="{i}">'
+                f'<label for="{lid}">'
+                f'<span class="legend-swatch" style="background:{layer["color"]};display:inline-block;width:12px;height:12px;border-radius:2px;margin-right:4px;vertical-align:middle;"></span>'
+                f'{layer["name"]}</label>'
+                f'</div>'
+            )
+        kml_sidebar_parts.append('</div>')
+        kml_layers_sidebar = "\n    ".join(kml_sidebar_parts)
+        kml_layers_js_data = json.dumps(kml_layers)
+    else:
+        kml_layers_sidebar = ""
+        kml_layers_js_data = "[]"
+
+    # ------------------------------------------------------------------
     # 5. Title / subtitle
     # ------------------------------------------------------------------
     dash_cfg = cfg.get("dashboard", {})
@@ -739,6 +950,8 @@ def generate_dashboard(cfg: dict, sim_results: dict, project_dir: str,
         is_multi_run_js="true" if is_multi else "false",
         run_labels_js=json.dumps(run_labels),
         rp_selector_html=rp_html,
+        kml_layers_sidebar=kml_layers_sidebar,
+        kml_layers_js=kml_layers_js_data,
     )
 
     out_path = project_dir / "Outputs" / "dashboard.html"

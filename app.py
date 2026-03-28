@@ -867,12 +867,12 @@ def api_pipeline_demo():
         "config": {
             "project": {"name": "demo_kg_mining", "dir": demo_project},
             "domain": {"from_dem": True},
-            "dem": {"source": "local", "path": dem_path, "target_res_m": 10},
+            "dem": {"source": "local", "path": dem_path, "target_res_m": 25},
             "snow": {"source": "fixed", "thickness_m": 1.0},
-            "release": {"slope_min_deg": 28, "slope_max_deg": 60, "min_area_m2": 10000,
-                        "simplify_tolerance_m": 10, "erode_cells": 3},
-            "simulation": {"friction_model": "samosATAuto", "mesh_cell_size_m": 15,
-                           "t_end_s": 200, "res_type": "ppr|pft|pfv", "snow_density": 200},
+            "release": {"slope_min_deg": 28, "slope_max_deg": 60, "min_area_m2": 50000,
+                        "simplify_tolerance_m": 15, "erode_cells": 3},
+            "simulation": {"friction_model": "samosATAuto", "mesh_cell_size_m": 25,
+                           "t_end_s": 150, "res_type": "ppr|pft|pfv", "snow_density": 200},
             "dashboard": {"generate": True, "title": "Demo - KG Mining Site Avalanche Hazard",
                           "downsample": 2},
         },
@@ -929,16 +929,32 @@ def api_pipeline_dashboard(project_name):
 
 @app.route("/api/pipeline/results/download")
 def api_pipeline_results_download():
-    """Download peak files as a zip."""
+    """Download result files as a zip.
+
+    By default downloads only .tif peak files (simulation results).
+    Pass ?type=all to include .tif, .png, .html, and .csv files.
+    """
     import zipfile
     project_dir = request.args.get("dir", "")
     if not project_dir:
         return jsonify({"error": "No dir"}), 400
 
+    download_type = request.args.get("type", "tif")  # "tif" (default) or "all"
+
     project_dir = os.path.expanduser(project_dir)
     outputs_dir = os.path.join(project_dir, "Outputs")
     if not os.path.isdir(outputs_dir):
         return jsonify({"error": "No outputs found"}), 404
+
+    # Derive project name for the zip filename
+    project_name = os.path.basename(project_dir.rstrip("/"))
+    if not project_name:
+        project_name = "avaframe_results"
+
+    if download_type == "all":
+        allowed_exts = (".tif", ".asc", ".png", ".html", ".csv")
+    else:
+        allowed_exts = (".tif",)
 
     # Create zip in memory
     zip_path = os.path.join(project_dir, ".pipeline", "results.zip")
@@ -947,13 +963,13 @@ def api_pipeline_results_download():
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
         for root, dirs, files in os.walk(outputs_dir):
             for f in files:
-                if f.endswith((".tif", ".asc", ".png", ".html", ".csv")):
+                if f.endswith(allowed_exts):
                     full = os.path.join(root, f)
                     arcname = os.path.relpath(full, project_dir)
                     zf.write(full, arcname)
 
     return send_file(zip_path, as_attachment=True,
-                     download_name=f"avaframe_results.zip")
+                     download_name=f"{project_name}_results.zip")
 
 
 @app.route("/api/docs/workflow/<workflow_id>")

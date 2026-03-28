@@ -212,7 +212,10 @@ def _step6_dashboard(cfg, project_dir, prev_results, log_fn):
     from pipeline_steps.dashboard import generate_dashboard
     sim_result = prev_results.get(5, {})
     result = generate_dashboard(cfg, sim_result, project_dir, log_fn)
-    log_fn(f"  Dashboard: {result['dashboard_path']}")
+    # generate_dashboard returns either a path string or a dict
+    if isinstance(result, str):
+        result = {"dashboard_path": result}
+    log_fn(f"  Dashboard: {result.get('dashboard_path', 'unknown')}")
     return result
 
 

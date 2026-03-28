@@ -688,6 +688,31 @@
               </div>
             </div>
           </div>
+
+          <!-- KML Overlays -->
+          <div class="card">
+            <div class="config-section-header collapse-toggle open" onclick="toggleSection(this)">
+              <i class="fas fa-chevron-right arrow"></i> KML Overlays (Optional)
+            </div>
+            <div class="section-body">
+              <div class="config-param">
+                <div><div class="config-key">upload</div><div class="config-doc">Upload KML files to overlay on the dashboard (master plans, infrastructure, paths, etc.)</div></div>
+                <div>
+                  <div id="kml-dropzone" style="border: 2px dashed var(--border); border-radius: 8px; padding: 20px; text-align: center; cursor: pointer; transition: all 0.2s; color: var(--text-muted); font-size: 0.82rem;"
+                       onclick="document.getElementById('kml-file-input').click()"
+                       ondragover="event.preventDefault(); this.style.borderColor='var(--accent)';"
+                       ondragleave="this.style.borderColor='var(--border)';"
+                       ondrop="handleKmlDrop(event)">
+                    <i class="fas fa-layer-group" style="font-size: 1.5rem; margin-bottom: 6px; display: block;"></i>
+                    Drop KML files here or click to browse
+                    <div id="kml-upload-status" style="margin-top: 8px;"></div>
+                  </div>
+                  <input type="file" id="kml-file-input" accept=".kml,.kmz" multiple style="display:none;" onchange="handleKmlSelect(event)">
+                  <div id="kml-file-list" style="margin-top: 8px; font-size: 0.8rem;"></div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- ===== AVAFRAME CONFIG TAB ===== -->
@@ -1805,6 +1830,53 @@ function uploadDemFile(file) {
     .catch(e => {
       status.style.color = 'var(--danger)';
       status.innerHTML = '<i class="fas fa-times-circle"></i> Upload failed';
+      toast('Upload error: ' + e, 'error');
+    });
+}
+
+// --- KML Upload ---
+function handleKmlDrop(event) {
+  event.preventDefault();
+  event.currentTarget.style.borderColor = 'var(--border)';
+  const files = event.dataTransfer.files;
+  for (let i = 0; i < files.length; i++) {
+    uploadKmlFile(files[i]);
+  }
+}
+
+function handleKmlSelect(event) {
+  const files = event.target.files;
+  for (let i = 0; i < files.length; i++) {
+    uploadKmlFile(files[i]);
+  }
+}
+
+function uploadKmlFile(file) {
+  const dir = document.getElementById('p-project-dir').value;
+  if (!dir) { toast('Set a project directory first', 'warning'); return; }
+
+  const status = document.getElementById('kml-upload-status');
+  status.innerHTML = '<span class="spinner"></span> Uploading ' + file.name + '...';
+
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('dir', dir);
+  formData.append('subdir', 'Inputs/KML');
+
+  fetch(BASE + '/api/pipeline/upload', { method: 'POST', body: formData })
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) { toast(data.error, 'error'); status.innerHTML = ''; return; }
+      status.innerHTML = '';
+      const list = document.getElementById('kml-file-list');
+      const item = document.createElement('div');
+      item.style.cssText = 'padding: 3px 0; color: var(--success);';
+      item.innerHTML = '<i class="fas fa-check-circle"></i> ' + file.name;
+      list.appendChild(item);
+      toast('KML uploaded: ' + file.name, 'success');
+    })
+    .catch(e => {
+      status.innerHTML = '<span style="color:var(--danger)"><i class="fas fa-times-circle"></i> Failed: ' + file.name + '</span>';
       toast('Upload error: ' + e, 'error');
     });
 }

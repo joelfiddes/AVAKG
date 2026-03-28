@@ -165,6 +165,14 @@ def validate_config(cfg: dict) -> list[str]:
         if buf <= 0:
             errors.append("domain.buffer_m must be > 0")
 
+    # Helper: coerce to numeric (form sends strings)
+    def _num(d, key, default=0):
+        v = d.get(key, default)
+        try:
+            return float(v)
+        except (TypeError, ValueError):
+            return default
+
     # --- dem ---
     dem = cfg.get("dem", {})
     source = dem.get("source", "copernicus")
@@ -172,9 +180,7 @@ def validate_config(cfg: dict) -> list[str]:
         errors.append(f"dem.source must be 'copernicus' or 'local', got '{source}'")
     if source == "local" and not dem.get("path"):
         errors.append("dem.path is required when dem.source is 'local'")
-    # Don't check dem.path existence here — file may be uploaded or
-    # created by demo endpoint between config validation and pipeline run
-    if dem.get("target_res_m", 5) <= 0:
+    if _num(dem, "target_res_m", 5) <= 0:
         errors.append("dem.target_res_m must be > 0")
 
     # --- snow ---
@@ -185,8 +191,8 @@ def validate_config(cfg: dict) -> list[str]:
             f"snow.source must be 'era5', 'manual', or 'fixed', got '{snow_source}'"
         )
     if snow_source == "fixed":
-        th = snow.get("thickness_m")
-        if th is not None and th <= 0:
+        th = _num(snow, "thickness_m", 1)
+        if th <= 0:
             errors.append("snow.thickness_m must be > 0")
     if snow_source == "manual":
         fd = snow.get("fracture_depths")
@@ -202,12 +208,12 @@ def validate_config(cfg: dict) -> list[str]:
 
     # --- release ---
     rel = cfg.get("release", {})
-    if rel.get("slope_min_deg", 28) >= rel.get("slope_max_deg", 60):
+    if _num(rel, "slope_min_deg", 28) >= _num(rel, "slope_max_deg", 60):
         errors.append("release.slope_min_deg must be < release.slope_max_deg")
 
     # --- simulation ---
     sim = cfg.get("simulation", {})
-    if sim.get("mesh_cell_size_m", 5) <= 0:
+    if _num(sim, "mesh_cell_size_m", 5) <= 0:
         errors.append("simulation.mesh_cell_size_m must be > 0")
 
     return errors

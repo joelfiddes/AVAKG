@@ -145,6 +145,26 @@ def run_simulations(cfg: dict, thicknesses: dict, project_dir: str,
                 log_fn(f"[sim] Removing extra DEM: {f.name}")
                 f.unlink()
 
+    # Remove release shapefiles with zero thickness (invalid for avaframe)
+    rel_dir = Path(project_dir) / "Inputs" / "REL"
+    if rel_dir.exists():
+        import fiona
+        from shapely.geometry import shape
+        for shp in sorted(rel_dir.glob("*.shp")):
+            try:
+                with fiona.open(shp) as f:
+                    for feat in f:
+                        th = feat["properties"].get("thickness", None)
+                        if th is not None and float(th) <= 0:
+                            log_fn(f"[sim] Removing {shp.name} (thickness={th})")
+                            for ext in [".shp", ".shx", ".dbf", ".prj", ".cpg"]:
+                                p = shp.with_suffix(ext)
+                                if p.exists():
+                                    p.unlink()
+                            break
+            except Exception:
+                pass
+
     snow_source = cfg.get("snow", {}).get("source", "fixed")
     is_single = (snow_source == "fixed")
 

@@ -1385,7 +1385,7 @@ function pollRunStatus() {
   let offset = 0;
 
   const poll = () => {
-    fetch(`/api/run/${currentRunId}/status?offset=${offset}`)
+    fetch(BASE + `/api/run/${currentRunId}/status?offset=${offset}`)
       .then(r => r.json())
       .then(data => {
         if (data.error) return;
@@ -1532,7 +1532,7 @@ function renderModuleDocs() {
   const workflowIds = ['com1DFA', 'com2AB', 'com4FlowPy', 'operational', 'probAna'];
 
   Promise.all(workflowIds.map(id =>
-    fetch(`/api/docs/workflow/${id}`).then(r => r.json()).then(d => ({id, ...d}))
+    fetch(BASE + `/api/docs/workflow/${id}`).then(r => r.json()).then(d => ({id, ...d}))
   )).then(docs => {
     for (const doc of docs) {
       if (doc.error) continue;
@@ -1558,7 +1558,7 @@ function renderModuleDocs() {
 function showWorkflowDocs() {
   if (!currentWorkflow) return;
 
-  fetch(`/api/docs/workflow/${currentWorkflow}`)
+  fetch(BASE + `/api/docs/workflow/${currentWorkflow}`)
     .then(r => r.json())
     .then(data => {
       if (data.error) { toast('No docs available', 'warning'); return; }
@@ -1941,7 +1941,7 @@ function pollPipelineStatus() {
   let offset = 0;
 
   const poll = () => {
-    fetch(`/api/pipeline/status/${pipelineRunId}?offset=${offset}`)
+    fetch(BASE + `/api/pipeline/status/${pipelineRunId}?offset=${offset}`)
       .then(r => r.json())
       .then(data => {
         if (data.error) return;

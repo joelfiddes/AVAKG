@@ -181,11 +181,18 @@ def _step3_snow(cfg, project_dir, prev_results, log_fn):
 
 
 def _step4_release(cfg, project_dir, prev_results, log_fn):
+    # Skip if release.skip is set (e.g. demo with pre-made shapefiles)
+    if cfg.get("release", {}).get("skip", False):
+        rel_dir = Path(project_dir) / "Inputs" / "REL"
+        shps = list(rel_dir.glob("*.shp")) if rel_dir.exists() else []
+        log_fn(f"  Skipping release generation — using {len(shps)} existing shapefile(s)")
+        return {"n_zones": len(shps), "shapefile_paths": [str(s) for s in shps],
+                "total_area_m2": 0, "skipped": True}
+
     from pipeline_steps.release import generate_release_areas
     dem_result = prev_results.get(2, {})
     dem_path = dem_result.get("dem_path", "")
     if not dem_path:
-        # Try to find DEM in Inputs/
         inputs = Path(project_dir) / "Inputs"
         dems = list(inputs.glob("*.tif")) + list(inputs.glob("*.asc"))
         if dems:

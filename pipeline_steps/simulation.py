@@ -158,9 +158,11 @@ def run_simulations(cfg: dict, thicknesses: dict, project_dir: str,
         thickness = list(thicknesses.values())[0]
         label = "fixed"
 
-        log_fn(f"[sim] Single-run mode, thickness = {thickness:.2f} m")
+        # Use relThFromShp if explicitly set (e.g. demo with pre-made shapefiles)
+        use_shp = cfg.get("simulation", {}).get("rel_th_from_shp", False)
+        log_fn(f"[sim] Single-run mode, thickness = {thickness:.2f} m, fromShp={use_shp}")
         _clean_com1dfa(project_dir)
-        _write_ini(project_dir, cfg, thickness=thickness, from_shp=False)
+        _write_ini(project_dir, cfg, thickness=thickness, from_shp=use_shp)
 
         log_fn("[sim] Running com1DFA ...")
         _run_com1dfa(project_dir)

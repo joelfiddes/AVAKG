@@ -834,32 +834,47 @@ def api_pipeline_status(run_id):
 
 @app.route("/api/pipeline/demo")
 def api_pipeline_demo():
-    """Return demo config with paths resolved to the demo directory."""
+    """Set up demo project with pre-baked inputs and return config.
+
+    The demo skips steps 1-4 entirely. We copy the DEM directly into
+    Inputs/ as dem.tif and the release shapefile into Inputs/REL/.
+    The pipeline runs only step 5 (simulation) and step 6 (dashboard).
+    """
     demo_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "demo")
-    demo_cfg = os.path.join(demo_dir, "demo_config.yaml")
-    if not os.path.exists(demo_cfg):
+    if not os.path.isdir(demo_dir):
         return jsonify({"error": "Demo data not found"}), 404
 
-    demo_project = os.path.join(DATA_DIR, "demo_kg_mining")
-    os.makedirs(os.path.join(demo_project, "Inputs", "REL"), exist_ok=True)
-    os.makedirs(os.path.join(demo_project, "Outputs"), exist_ok=True)
-    os.makedirs(os.path.join(demo_project, "Work"), exist_ok=True)
-
-    # Copy demo inputs to project dir
     import shutil
-    src_inputs = os.path.join(demo_dir, "Inputs")
-    dst_inputs = os.path.join(demo_project, "Inputs")
-    for item in os.listdir(src_inputs):
-        s = os.path.join(src_inputs, item)
-        d = os.path.join(dst_inputs, item)
-        if os.path.isdir(s):
-            if os.path.exists(d):
-                shutil.rmtree(d)
-            shutil.copytree(s, d)
-        elif not os.path.exists(d):
-            shutil.copy2(s, d)
+    import json as json_mod
 
-    dem_path = os.path.join(demo_project, "Inputs", "demo_dem.tif")
+    demo_project = os.path.join(DATA_DIR, "demo_kg_mining")
+
+    # Always start fresh for demo
+    if os.path.exists(demo_project):
+        shutil.rmtree(demo_project)
+
+    for d in ["Inputs/REL", "Outputs", "Work", ".pipeline"]:
+        os.makedirs(os.path.join(demo_project, d), exist_ok=True)
+
+    # Copy DEM as dem.tif (the only DEM avaframe should see)
+    shutil.copy2(
+        os.path.join(demo_dir, "Inputs", "demo_dem.tif"),
+        os.path.join(demo_project, "Inputs", "dem.tif"),
+    )
+
+    # Copy release shapefile
+    for ext in [".shp", ".shx", ".dbf", ".prj", ".cpg"]:
+        src = os.path.join(demo_dir, "Inputs", "REL", f"rel_demo{ext}")
+        if os.path.exists(src):
+            shutil.copy2(src, os.path.join(demo_project, "Inputs", "REL", f"rel_demo{ext}"))
+
+    dem_path = os.path.join(demo_project, "Inputs", "dem.tif")
+
+    # Pre-create checkpoints for steps 1-4 so pipeline skips to step 5
+    for step in range(1, 5):
+        cp = {"step": step, "timestamp": "", "cfg_hash": "demo", "result": {"demo": True}}
+        with open(os.path.join(demo_project, ".pipeline", f"step{step}.json"), "w") as f:
+            json_mod.dump(cp, f)
 
     return jsonify({
         "project_dir": demo_project,
@@ -869,7 +884,7 @@ def api_pipeline_demo():
             "domain": {"from_dem": True},
             "dem": {"source": "local", "path": dem_path, "target_res_m": 25},
             "snow": {"source": "fixed", "thickness_m": 2.0},
-            "release": {"skip": True},
+            "release": {"slope_min_deg": 28, "slope_max_deg": 60, "min_area_m2": 50000},
             "simulation": {"friction_model": "samosATAuto", "mesh_cell_size_m": 25,
                            "t_end_s": 150, "res_type": "ppr|pft|pfv", "snow_density": 200,
                            "rel_th_from_shp": True},

@@ -172,9 +172,8 @@ def validate_config(cfg: dict) -> list[str]:
         errors.append(f"dem.source must be 'copernicus' or 'local', got '{source}'")
     if source == "local" and not dem.get("path"):
         errors.append("dem.path is required when dem.source is 'local'")
-    if source == "local" and dem.get("path"):
-        if not Path(dem["path"]).exists():
-            errors.append(f"dem.path not found: {dem['path']}")
+    # Don't check dem.path existence here — file may be uploaded or
+    # created by demo endpoint between config validation and pipeline run
     if dem.get("target_res_m", 5) <= 0:
         errors.append("dem.target_res_m must be > 0")
 

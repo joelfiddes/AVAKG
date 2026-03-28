@@ -1,0 +1,36 @@
+# Test config — uses existing Jyrgalan DEM from LaCie, fixed thickness, small domain
+project:
+  name: jyrgalan_test
+  dir: /Users/joel/src/avaframe/test_sim
+
+domain:
+  center_lat: 42.59
+  center_lon: 78.95
+  buffer_m: 2000
+
+dem:
+  source: local
+  path: /Volumes/LaCie/MAC/sim/Avaframe_jygylan/djyrgalan_avaframe/Inputs/djyrgalan_dem.tif
+  target_res_m: 10
+
+snow:
+  source: fixed
+  thickness_m: 1.5
+
+release:
+  slope_min_deg: 28
+  slope_max_deg: 60
+  min_area_m2: 5000
+  simplify_tolerance_m: 10
+  erode_cells: 3
+
+simulation:
+  friction_model: samosATAuto
+  mesh_cell_size_m: 10
+  t_end_s: 300
+  res_type: "ppr|pft|pfv"
+
+dashboard:
+  generate: true
+  title: "Jyrgalan Test Run"
+  downsample: 2

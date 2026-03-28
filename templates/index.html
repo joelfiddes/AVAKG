@@ -1,0 +1,1991 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AvaFrame Web UI</title>
+  <meta name="base-path" content="{{ config.get('APPLICATION_ROOT', '') }}">
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+  <style>
+    :root {
+      --bg-primary: #0f172a;
+      --bg-secondary: #1e293b;
+      --bg-tertiary: #334155;
+      --accent: #38bdf8;
+      --accent-hover: #7dd3fc;
+      --success: #4ade80;
+      --warning: #fbbf24;
+      --danger: #f87171;
+      --text-primary: #f1f5f9;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      --border: #475569;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg-primary); color: var(--text-primary);
+      display: flex; height: 100vh; overflow: hidden;
+    }
+
+    /* Sidebar */
+    .sidebar {
+      width: 260px; min-width: 260px; background: var(--bg-secondary);
+      border-right: 1px solid var(--border); display: flex; flex-direction: column;
+      overflow-y: auto;
+    }
+    .sidebar-header {
+      padding: 20px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 12px;
+    }
+    .sidebar-header h1 { font-size: 1.25rem; font-weight: 700; margin: 0; }
+    .sidebar-header .version { font-size: 0.75rem; color: var(--text-muted); }
+    .nav-section { padding: 12px 0; }
+    .nav-section-title {
+      font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em;
+      color: var(--text-muted); padding: 4px 20px; font-weight: 600;
+    }
+    .nav-item {
+      display: flex; align-items: center; gap: 10px; padding: 10px 20px;
+      cursor: pointer; transition: all 0.15s; color: var(--text-secondary);
+      border-left: 3px solid transparent; font-size: 0.9rem;
+    }
+    .nav-item:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+    .nav-item.active {
+      background: rgba(56, 189, 248, 0.1); color: var(--accent);
+      border-left-color: var(--accent);
+    }
+    .nav-item i { width: 20px; text-align: center; }
+
+    /* Logo */
+    .sidebar-footer {
+      margin-top: auto; padding: 16px 20px; border-top: 1px solid var(--border);
+      text-align: center;
+    }
+    .sidebar-footer a { display: inline-block; }
+    .sidebar-footer img { height: 32px; opacity: 0.7; transition: opacity 0.2s; }
+    .sidebar-footer img:hover { opacity: 1; }
+
+    /* Main */
+    .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    .topbar {
+      padding: 16px 24px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      background: var(--bg-secondary);
+    }
+    .topbar h2 { margin: 0; font-size: 1.1rem; font-weight: 600; }
+    .content { flex: 1; overflow-y: auto; padding: 24px; }
+
+    /* Cards */
+    .card {
+      background: var(--bg-secondary); border: 1px solid var(--border);
+      border-radius: 8px; padding: 20px; margin-bottom: 16px;
+    }
+    .card-title {
+      font-size: 1rem; font-weight: 600; margin: 0 0 12px 0;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .card-description { color: var(--text-secondary); font-size: 0.85rem; line-height: 1.5; }
+
+    /* Forms */
+    .form-group { margin-bottom: 12px; }
+    .form-label {
+      display: block; font-size: 0.8rem; font-weight: 500;
+      color: var(--text-secondary); margin-bottom: 4px;
+    }
+    .form-input, .form-select {
+      width: 100%; padding: 8px 12px; background: var(--bg-primary);
+      border: 1px solid var(--border); border-radius: 6px;
+      color: var(--text-primary); font-size: 0.85rem;
+      transition: border-color 0.15s;
+    }
+    .form-input:focus, .form-select:focus {
+      outline: none; border-color: var(--accent);
+    }
+    .form-input.modified { border-color: var(--warning); background: rgba(251, 191, 36, 0.05); }
+
+    /* Buttons */
+    .btn {
+      padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer;
+      font-size: 0.85rem; font-weight: 500; transition: all 0.15s;
+      display: inline-flex; align-items: center; gap: 6px;
+    }
+    .btn-primary { background: var(--accent); color: var(--bg-primary); }
+    .btn-primary:hover { background: var(--accent-hover); }
+    .btn-success { background: var(--success); color: var(--bg-primary); }
+    .btn-success:hover { opacity: 0.9; }
+    .btn-danger { background: var(--danger); color: white; }
+    .btn-outline {
+      background: transparent; border: 1px solid var(--border); color: var(--text-secondary);
+    }
+    .btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+    .btn-sm { padding: 5px 10px; font-size: 0.78rem; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* Tabs */
+    .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
+    .tab {
+      padding: 8px 16px; cursor: pointer; font-size: 0.85rem; color: var(--text-muted);
+      border-bottom: 2px solid transparent; transition: all 0.15s;
+    }
+    .tab:hover { color: var(--text-primary); }
+    .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+    /* Config table */
+    .config-section { margin-bottom: 24px; }
+    .config-section-header {
+      font-size: 0.95rem; font-weight: 600; padding: 8px 0;
+      border-bottom: 1px solid var(--border); margin-bottom: 12px;
+      color: var(--accent);
+    }
+    .config-param {
+      display: grid; grid-template-columns: 220px 1fr; gap: 8px;
+      padding: 8px 0; border-bottom: 1px solid rgba(71, 85, 105, 0.3);
+      align-items: start;
+    }
+    .config-param:last-child { border-bottom: none; }
+    .config-key {
+      font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 0.82rem;
+      color: var(--accent); padding-top: 6px;
+    }
+    .config-doc {
+      font-size: 0.78rem; color: var(--text-muted); margin-top: 4px;
+      line-height: 1.4; white-space: pre-wrap;
+    }
+    .param-value-row { display: flex; gap: 8px; align-items: center; }
+    .param-input {
+      flex: 1; padding: 6px 10px; background: var(--bg-primary);
+      border: 1px solid var(--border); border-radius: 4px;
+      color: var(--text-primary); font-size: 0.82rem;
+      font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    }
+    .param-input:focus { outline: none; border-color: var(--accent); }
+    .param-input.modified { border-color: var(--warning); background: rgba(251, 191, 36, 0.05); }
+    .param-default {
+      font-size: 0.72rem; color: var(--text-muted); font-style: italic;
+    }
+
+    /* Log viewer */
+    .log-viewer {
+      background: #0c0c0c; border: 1px solid var(--border); border-radius: 6px;
+      padding: 12px; font-family: 'JetBrains Mono', 'Fira Code', monospace;
+      font-size: 0.78rem; line-height: 1.5; overflow-y: auto;
+      max-height: 500px; color: #a0a0a0; white-space: pre-wrap;
+    }
+    .log-line-info { color: #4ade80; }
+    .log-line-warn { color: #fbbf24; }
+    .log-line-error { color: #f87171; }
+    .log-line-debug { color: #64748b; }
+
+    /* Status badges */
+    .badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 2px 8px; border-radius: 9999px; font-size: 0.72rem; font-weight: 600;
+    }
+    .badge-running { background: rgba(56, 189, 248, 0.15); color: var(--accent); }
+    .badge-complete { background: rgba(74, 222, 128, 0.15); color: var(--success); }
+    .badge-error { background: rgba(248, 113, 113, 0.15); color: var(--danger); }
+
+    /* File tree */
+    .file-tree { font-size: 0.82rem; }
+    .file-tree-dir {
+      padding: 4px 0; cursor: pointer; color: var(--text-secondary);
+      display: flex; align-items: center; gap: 6px;
+    }
+    .file-tree-dir:hover { color: var(--text-primary); }
+    .file-tree-file {
+      padding: 3px 0 3px 24px; color: var(--text-muted);
+      display: flex; align-items: center; gap: 6px; font-size: 0.78rem;
+    }
+    .file-tree-file a { color: var(--accent); text-decoration: none; }
+    .file-tree-file a:hover { text-decoration: underline; }
+
+    /* Docs */
+    .docs-content { line-height: 1.7; font-size: 0.9rem; }
+    .docs-content h2 { color: var(--accent); font-size: 1.1rem; margin: 20px 0 10px 0; }
+    .docs-content h3 { color: var(--text-primary); font-size: 0.95rem; margin: 16px 0 8px 0; }
+    .docs-content strong { color: var(--text-primary); }
+    .docs-content code {
+      background: var(--bg-tertiary); padding: 2px 6px; border-radius: 3px;
+      font-size: 0.82rem;
+    }
+    .docs-content ul { padding-left: 20px; }
+    .docs-content li { margin-bottom: 4px; color: var(--text-secondary); }
+
+    /* Grid */
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+
+    /* Spinner */
+    .spinner {
+      display: inline-block; width: 16px; height: 16px;
+      border: 2px solid var(--border); border-top-color: var(--accent);
+      border-radius: 50%; animation: spin 0.6s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Toast */
+    .toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 1000; }
+    .toast {
+      background: var(--bg-tertiary); border: 1px solid var(--border);
+      border-radius: 8px; padding: 12px 16px; margin-top: 8px;
+      font-size: 0.85rem; box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      animation: slideIn 0.3s ease;
+    }
+    @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } }
+
+    /* Collapsible */
+    .collapse-toggle {
+      cursor: pointer; user-select: none;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .collapse-toggle .arrow { transition: transform 0.2s; }
+    .collapse-toggle.open .arrow { transform: rotate(90deg); }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: var(--bg-primary); }
+    ::-webkit-scrollbar-thumb { background: var(--bg-tertiary); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--border); }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .sidebar { width: 60px; min-width: 60px; }
+      .sidebar .nav-item span, .sidebar-header h1, .sidebar-header .version,
+      .nav-section-title, .sidebar-footer { display: none; }
+    }
+
+    /* Workflow card */
+    .workflow-card {
+      border: 1px solid var(--border); border-radius: 8px; padding: 16px;
+      cursor: pointer; transition: all 0.15s; background: var(--bg-secondary);
+    }
+    .workflow-card:hover { border-color: var(--accent); background: rgba(56, 189, 248, 0.05); }
+    .workflow-card.selected { border-color: var(--accent); background: rgba(56, 189, 248, 0.1); }
+    .workflow-card h3 { margin: 0 0 6px 0; font-size: 0.95rem; }
+    .workflow-card p { margin: 0; font-size: 0.82rem; color: var(--text-secondary); }
+
+    /* Project input */
+    .project-bar {
+      display: flex; gap: 8px; align-items: center; margin-bottom: 20px;
+    }
+    .project-bar .form-input { max-width: 500px; }
+
+    /* Pipeline tab content */
+    .pipeline-tab-content { }
+
+    /* Pipeline step cards */
+    .pipeline-step-card {
+      background: var(--bg-primary); border: 1px solid var(--border);
+      border-radius: 6px; padding: 10px; text-align: center;
+      transition: all 0.3s;
+    }
+    .pipeline-step-card .step-num {
+      font-size: 1.2rem; font-weight: 700; color: var(--text-muted);
+    }
+    .pipeline-step-card .step-label {
+      font-size: 0.72rem; color: var(--text-muted); margin-top: 4px;
+    }
+    .pipeline-step-card.active {
+      border-color: var(--accent); background: rgba(56, 189, 248, 0.1);
+    }
+    .pipeline-step-card.active .step-num { color: var(--accent); }
+    .pipeline-step-card.done {
+      border-color: var(--success); background: rgba(74, 222, 128, 0.1);
+    }
+    .pipeline-step-card.done .step-num { color: var(--success); }
+    .pipeline-step-card.error {
+      border-color: var(--danger); background: rgba(248, 113, 113, 0.1);
+    }
+    .pipeline-step-card.error .step-num { color: var(--danger); }
+
+    /* Hide sections */
+    .page { display: none; }
+    .page.active { display: block; }
+  </style>
+</head>
+<body>
+
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <i class="fas fa-mountain" style="color: var(--accent); font-size: 1.5rem;"></i>
+      <div>
+        <h1>AvaFrame</h1>
+        <div class="version">Web UI v1.0</div>
+      </div>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-section-title">Setup</div>
+      <div class="nav-item active" onclick="showPage('project')">
+        <i class="fas fa-folder-open"></i> <span>Project</span>
+      </div>
+      <div class="nav-item" onclick="showPage('config')">
+        <i class="fas fa-sliders-h"></i> <span>Configuration</span>
+      </div>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-section-title">Simulation</div>
+      <div class="nav-item" onclick="showPage('pipeline')">
+        <i class="fas fa-rocket"></i> <span>Pipeline</span>
+      </div>
+      <div class="nav-item" onclick="showPage('run')">
+        <i class="fas fa-play-circle"></i> <span>Run (Manual)</span>
+      </div>
+      <div class="nav-item" onclick="showPage('results')">
+        <i class="fas fa-chart-bar"></i> <span>Results</span>
+      </div>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-section-title">Help</div>
+      <div class="nav-item" onclick="showPage('docs')">
+        <i class="fas fa-book"></i> <span>Documentation</span>
+      </div>
+      <div class="nav-item" onclick="showPage('about')">
+        <i class="fas fa-info-circle"></i> <span>About</span>
+      </div>
+    </div>
+
+    <div class="sidebar-footer">
+      <a href="https://mountainfutures.ch" target="_blank">
+        <img src="{{ config.get('APPLICATION_ROOT', '') }}/static/mf_logo.svg"
+             alt="Mountain Futures" onerror="this.style.display='none'">
+      </a>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div class="main">
+    <div class="topbar">
+      <h2 id="page-title">Project Setup</h2>
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <span id="project-indicator" style="font-size: 0.82rem; color: var(--text-muted);">
+          No project loaded
+        </span>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <!-- ==================== PROJECT PAGE ==================== -->
+      <div id="page-project" class="page active">
+        <div class="card">
+          <div class="card-title"><i class="fas fa-folder-open" style="color: var(--accent);"></i> Project Directory</div>
+          <div class="card-description" style="margin-bottom: 16px;">
+            Set the path to your AvaFrame project directory. This directory should contain (or will contain) the standard AvaFrame folder structure.
+          </div>
+
+          <div class="project-bar">
+            <input type="text" id="ava-dir" class="form-input" placeholder="/path/to/your/avalanche/project"
+                   value="" style="flex: 1;">
+            <button class="btn btn-primary" onclick="loadProject()">
+              <i class="fas fa-folder-open"></i> Load
+            </button>
+            <button class="btn btn-outline" onclick="initProject()">
+              <i class="fas fa-plus"></i> Initialize New
+            </button>
+          </div>
+
+          <div id="project-status" style="display: none;"></div>
+        </div>
+
+        <div id="project-info" style="display: none;">
+          <div class="grid-2">
+            <div class="card">
+              <div class="card-title"><i class="fas fa-upload" style="color: var(--success);"></i> Input Files</div>
+              <div id="input-files-list" class="file-tree"></div>
+            </div>
+            <div class="card">
+              <div class="card-title"><i class="fas fa-download" style="color: var(--warning);"></i> Output Files</div>
+              <div id="output-files-list" class="file-tree"></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title"><i class="fas fa-info-circle" style="color: var(--accent);"></i> Required Directory Structure</div>
+            <div style="font-family: monospace; font-size: 0.82rem; color: var(--text-secondary); line-height: 1.8;">
+              <div>your_project/</div>
+              <div style="padding-left: 20px;">Inputs/</div>
+              <div style="padding-left: 40px; color: var(--success);">*.tif or *.asc <span style="color: var(--text-muted);">- DEM raster</span></div>
+              <div style="padding-left: 40px;">REL/ <span style="color: var(--text-muted);">- Release area shapefiles (required for most modules)</span></div>
+              <div style="padding-left: 40px;">ENT/ <span style="color: var(--text-muted);">- Entrainment area shapefiles (optional)</span></div>
+              <div style="padding-left: 40px;">RES/ <span style="color: var(--text-muted);">- Resistance area shapefiles (optional)</span></div>
+              <div style="padding-left: 40px;">SECREL/ <span style="color: var(--text-muted);">- Secondary release shapefiles (optional)</span></div>
+              <div style="padding-left: 40px;">LINES/ <span style="color: var(--text-muted);">- Avalanche path lines (for com2AB)</span></div>
+              <div style="padding-left: 40px;">POINTS/ <span style="color: var(--text-muted);">- Split points (for com2AB)</span></div>
+              <div style="padding-left: 40px;">DAM/ <span style="color: var(--text-muted);">- Dam line shapefiles (optional)</span></div>
+              <div style="padding-left: 40px;">RASTERS/ <span style="color: var(--text-muted);">- Additional rasters (optional)</span></div>
+              <div style="padding-left: 20px;">Outputs/ <span style="color: var(--text-muted);">- Simulation results (auto-generated)</span></div>
+              <div style="padding-left: 20px;">Work/ <span style="color: var(--text-muted);">- Temporary files (auto-generated)</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==================== CONFIG PAGE ==================== -->
+      <div id="page-config" class="page">
+        <div class="card">
+          <div class="card-title"><i class="fas fa-sliders-h" style="color: var(--accent);"></i> Module Configuration</div>
+          <div class="card-description">
+            View and modify configuration parameters for each AvaFrame module. Changes can be saved as local override files in your project directory.
+          </div>
+        </div>
+
+        <div class="tabs" id="config-tabs"></div>
+        <div id="config-content"></div>
+      </div>
+
+      <!-- ==================== PIPELINE PAGE ==================== -->
+      <div id="page-pipeline" class="page">
+        <div class="card">
+          <div class="card-title"><i class="fas fa-rocket" style="color: var(--accent);"></i> Unified Pipeline</div>
+          <div class="card-description">
+            End-to-end avalanche hazard assessment: DEM acquisition, snow climatology, release area generation, com1DFA simulation, and interactive dashboard.
+          </div>
+        </div>
+
+        <!-- Two config tabs: General + AvaFrame -->
+        <div class="tabs" id="pipeline-tabs">
+          <div class="tab active" onclick="showPipelineTab('general', this)">General Config</div>
+          <div class="tab" onclick="showPipelineTab('avaframe', this)">AvaFrame Config</div>
+          <div class="tab" onclick="showPipelineTab('yaml', this)">YAML (Advanced)</div>
+        </div>
+
+        <!-- ===== GENERAL CONFIG TAB ===== -->
+        <div id="ptab-general" class="pipeline-tab-content">
+
+          <!-- Project -->
+          <div class="card">
+            <div class="config-section-header collapse-toggle open" onclick="toggleSection(this)">
+              <i class="fas fa-chevron-right arrow"></i> Project
+            </div>
+            <div class="section-body">
+              <div class="config-param">
+                <div><div class="config-key">name</div><div class="config-doc">Project name (used for titles and directory naming)</div></div>
+                <div><input type="text" class="param-input" id="p-project-name" value="my_avalanche_project" data-path="project.name"></div>
+              </div>
+              <div class="config-param">
+                <div><div class="config-key">dir</div><div class="config-doc">Output directory — will contain Inputs/, Outputs/, Work/</div></div>
+                <div><input type="text" class="param-input" id="p-project-dir" value="/Users/joel/src/avaframe/test_sim" placeholder="/path/to/project" data-path="project.dir"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Domain -->
+          <div class="card">
+            <div class="config-section-header collapse-toggle open" onclick="toggleSection(this)">
+              <i class="fas fa-chevron-right arrow"></i> Domain
+            </div>
+            <div class="section-body">
+              <div class="config-param">
+                <div><div class="config-key">mode</div><div class="config-doc">How to define the study area</div></div>
+                <div>
+                  <select class="param-input" id="p-domain-mode" onchange="toggleDomainMode()">
+                    <option value="center">Center + Buffer</option>
+                    <option value="bbox">Bounding Box (WGS84)</option>
+                    <option value="shapefile">Shapefile</option>
+                    <option value="from_dem">From DEM extent (use local DEM bounds)</option>
+                  </select>
+                </div>
+              </div>
+              <div id="domain-center-fields">
+                <div class="config-param">
+                  <div><div class="config-key">center_lat</div><div class="config-doc">Center latitude (WGS84 decimal degrees)</div></div>
+                  <div><input type="number" step="0.0001" class="param-input" id="p-domain-lat" value="42.5838" placeholder="42.58" data-path="domain.center_lat"></div>
+                </div>
+                <div class="config-param">
+                  <div><div class="config-key">center_lon</div><div class="config-doc">Center longitude (WGS84 decimal degrees)</div></div>
+                  <div><input type="number" step="0.0001" class="param-input" id="p-domain-lon" value="78.9453" placeholder="78.95" data-path="domain.center_lon"></div>
+                </div>
+                <div class="config-param">
+                  <div><div class="config-key">buffer_m</div><div class="config-doc">Half-width of domain in meters (total domain = 2x buffer)</div></div>
+                  <div><input type="number" class="param-input" id="p-domain-buffer" value="2000" data-path="domain.buffer_m"></div>
+                </div>
+              </div>
+              <div id="domain-bbox-fields" style="display:none;">
+                <div class="config-param">
+                  <div><div class="config-key">bbox</div><div class="config-doc">[west, south, east, north] in WGS84 degrees</div></div>
+                  <div><input type="text" class="param-input" id="p-domain-bbox" value="" placeholder="78.85, 42.50, 79.05, 42.65" data-path="domain.bbox"></div>
+                </div>
+              </div>
+              <div id="domain-shp-fields" style="display:none;">
+                <div class="config-param">
+                  <div><div class="config-key">shapefile</div><div class="config-doc">Path to study area boundary shapefile</div></div>
+                  <div><input type="text" class="param-input" id="p-domain-shp" value="" placeholder="/path/to/study_area.shp" data-path="domain.shapefile"></div>
+                </div>
+              </div>
+              <div class="config-param">
+                <div><div class="config-key">target_epsg</div><div class="config-doc">Target CRS (auto-detected from centroid if left empty)</div></div>
+                <div><input type="number" class="param-input" id="p-domain-epsg" value="" placeholder="auto" data-path="domain.target_epsg"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- DEM -->
+          <div class="card">
+            <div class="config-section-header collapse-toggle open" onclick="toggleSection(this)">
+              <i class="fas fa-chevron-right arrow"></i> DEM
+            </div>
+            <div class="section-body">
+              <div class="config-param">
+                <div><div class="config-key">source</div><div class="config-doc">DEM data source</div></div>
+                <div>
+                  <select class="param-input" id="p-dem-source" onchange="toggleDemSource()" data-path="dem.source">
+                    <option value="copernicus" selected>Copernicus GLO-30 (auto-download, ~30m)</option>
+                    <option value="local">Local file (upload or path)</option>
+                  </select>
+                </div>
+              </div>
+              <div id="dem-local-fields" style="display:none;">
+                <div class="config-param">
+                  <div><div class="config-key">path</div><div class="config-doc">Path on server, or drag-and-drop a file below to upload</div></div>
+                  <div><input type="text" class="param-input" id="p-dem-path" value="" placeholder="/path/to/dem.tif (or upload below)" data-path="dem.path"></div>
+                </div>
+                <div class="config-param">
+                  <div><div class="config-key">upload</div><div class="config-doc">Upload a DEM file (.tif, .asc) — max 500 MB</div></div>
+                  <div>
+                    <div id="dem-dropzone" style="border: 2px dashed var(--border); border-radius: 8px; padding: 20px; text-align: center; cursor: pointer; transition: all 0.2s; color: var(--text-muted); font-size: 0.82rem;"
+                         onclick="document.getElementById('dem-file-input').click()"
+                         ondragover="event.preventDefault(); this.style.borderColor='var(--accent)'; this.style.color='var(--accent)';"
+                         ondragleave="this.style.borderColor='var(--border)'; this.style.color='var(--text-muted)';"
+                         ondrop="handleDemDrop(event)">
+                      <i class="fas fa-cloud-upload-alt" style="font-size: 1.5rem; margin-bottom: 6px; display: block;"></i>
+                      Drop DEM file here or click to browse
+                      <div id="dem-upload-status" style="margin-top: 6px; color: var(--success); display: none;"></div>
+                    </div>
+                    <input type="file" id="dem-file-input" accept=".tif,.tiff,.asc" style="display:none;" onchange="handleDemSelect(event)">
+                  </div>
+                </div>
+              </div>
+              <div class="config-param">
+                <div><div class="config-key">target_res_m</div><div class="config-doc">Target resolution in meters (DEM will be resampled)</div></div>
+                <div>
+                  <select class="param-input" id="p-dem-res" data-path="dem.target_res_m">
+                    <option value="2">2 m (very high detail, slow)</option>
+                    <option value="5">5 m (recommended)</option>
+                    <option value="10" selected>10 m (fast, less detail)</option>
+                    <option value="25">25 m (screening)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Snow -->
+          <div class="card">
+            <div class="config-section-header collapse-toggle open" onclick="toggleSection(this)">
+              <i class="fas fa-chevron-right arrow"></i> Snow / Release Thickness
+            </div>
+            <div class="section-body">
+              <div class="config-param">
+                <div><div class="config-key">source</div><div class="config-doc">How to determine release thickness (d0)</div></div>
+                <div>
+                  <select class="param-input" id="p-snow-source" onchange="toggleSnowSource()" data-path="snow.source">
+                    <option value="fixed">Fixed thickness (single value)</option>
+                    <option value="manual">Manual (per return period)</option>
+                    <option value="era5">ERA5 Snow Climatology (automatic)</option>
+                  </select>
+                </div>
+              </div>
+              <div id="snow-fixed-fields">
+                <div class="config-param">
+                  <div><div class="config-key">thickness_m</div><div class="config-doc">Release thickness in meters (normal to slope). Typical: 0.5-2.0 m</div></div>
+                  <div><input type="number" step="0.1" class="param-input" id="p-snow-thickness" value="1.5" data-path="snow.thickness_m"></div>
+                </div>
+              </div>
+              <div id="snow-manual-fields" style="display:none;">
+                <div class="config-param">
+                  <div><div class="config-key">fracture_depths</div><div class="config-doc">d0 per return period in meters (e.g. 30: 0.68, 100: 0.95, 300: 1.22)</div></div>
+                  <div>
+                    <div style="display:grid; grid-template-columns: 80px 1fr; gap:4px; align-items:center; font-size:0.82rem;">
+                      <span style="color:var(--text-muted);">30-yr:</span>
+                      <input type="number" step="0.01" class="param-input" id="p-snow-d0-30" value="0.68" placeholder="0.68">
+                      <span style="color:var(--text-muted);">100-yr:</span>
+                      <input type="number" step="0.01" class="param-input" id="p-snow-d0-100" value="0.95" placeholder="0.95">
+                      <span style="color:var(--text-muted);">300-yr:</span>
+                      <input type="number" step="0.01" class="param-input" id="p-snow-d0-300" value="1.22" placeholder="1.22">
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div id="snow-era5-fields" style="display:none;">
+                <div class="config-param">
+                  <div><div class="config-key">latitude / longitude</div><div class="config-doc">ERA5 grid point (uses domain center if empty)</div></div>
+                  <div style="display:flex; gap:8px;">
+                    <input type="number" step="0.01" class="param-input" id="p-snow-lat" value="" placeholder="lat (auto)" data-path="snow.latitude" style="flex:1;">
+                    <input type="number" step="0.01" class="param-input" id="p-snow-lon" value="" placeholder="lon (auto)" data-path="snow.longitude" style="flex:1;">
+                  </div>
+                </div>
+                <div class="config-param">
+                  <div><div class="config-key">grid_elevation_m</div><div class="config-doc">ERA5 grid cell mean elevation (for elevation correction)</div></div>
+                  <div><input type="number" class="param-input" id="p-snow-grid-elev" value="2800" data-path="snow.grid_elevation_m"></div>
+                </div>
+                <div class="config-param">
+                  <div><div class="config-key">target_elevation_m</div><div class="config-doc">Median release zone elevation</div></div>
+                  <div><input type="number" class="param-input" id="p-snow-target-elev" value="3000" data-path="snow.target_elevation_m"></div>
+                </div>
+                <div class="config-param">
+                  <div><div class="config-key">mean_slope_deg</div><div class="config-doc">Mean release zone slope angle for perpendicular correction</div></div>
+                  <div><input type="number" step="1" class="param-input" id="p-snow-slope" value="35" data-path="snow.mean_slope_deg"></div>
+                </div>
+                <div class="config-param">
+                  <div><div class="config-key">wind_loading_m</div><div class="config-doc">Wind loading addition: 0 (sheltered) to 0.5 m (extreme lee)</div></div>
+                  <div><input type="number" step="0.05" class="param-input" id="p-snow-wind" value="0.0" data-path="snow.wind_loading_m"></div>
+                </div>
+                <div class="config-param">
+                  <div><div class="config-key">return_periods</div><div class="config-doc">Return periods for EVA (Swiss standard: 30, 100, 300)</div></div>
+                  <div><input type="text" class="param-input" id="p-snow-rp" value="30, 100, 300" data-path="snow.return_periods"></div>
+                </div>
+                <div class="config-param">
+                  <div><div class="config-key">start_year</div><div class="config-doc">Start year for ERA5 data (1950 recommended for best statistics)</div></div>
+                  <div><input type="number" class="param-input" id="p-snow-start" value="1950" data-path="snow.start_year"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Release Areas -->
+          <div class="card">
+            <div class="config-section-header collapse-toggle open" onclick="toggleSection(this)">
+              <i class="fas fa-chevron-right arrow"></i> Release Areas
+            </div>
+            <div class="section-body">
+              <div class="config-param">
+                <div><div class="config-key">slope_min_deg</div><div class="config-doc">Minimum slope for release zones (Swiss standard: 28 deg)</div></div>
+                <div><input type="number" step="1" class="param-input" id="p-rel-smin" value="28" data-path="release.slope_min_deg"></div>
+              </div>
+              <div class="config-param">
+                <div><div class="config-key">slope_max_deg</div><div class="config-doc">Maximum slope (steeper slopes don't accumulate snow, standard: 60 deg)</div></div>
+                <div><input type="number" step="1" class="param-input" id="p-rel-smax" value="60" data-path="release.slope_max_deg"></div>
+              </div>
+              <div class="config-param">
+                <div><div class="config-key">min_area_m2</div><div class="config-doc">Minimum release area polygon size</div></div>
+                <div>
+                  <select class="param-input" id="p-rel-area" data-path="release.min_area_m2">
+                    <option value="1000">1,000 m2 (very small slides)</option>
+                    <option value="2500">2,500 m2 (standard)</option>
+                    <option value="5000">5,000 m2 (medium+)</option>
+                    <option value="10000" selected>10,000 m2 (large only, fast)</option>
+                  </select>
+                </div>
+              </div>
+              <div class="config-param">
+                <div><div class="config-key">simplify_tolerance_m</div><div class="config-doc">Polygon simplification tolerance (reduces vertices)</div></div>
+                <div><input type="number" step="1" class="param-input" id="p-rel-simp" value="5" data-path="release.simplify_tolerance_m"></div>
+              </div>
+              <div class="config-param">
+                <div><div class="config-key">erode_cells</div><div class="config-doc">DEM edge erosion in cells (prevents polygons touching nodata)</div></div>
+                <div><input type="number" class="param-input" id="p-rel-erode" value="3" data-path="release.erode_cells"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== AVAFRAME CONFIG TAB ===== -->
+        <div id="ptab-avaframe" class="pipeline-tab-content" style="display:none;">
+
+          <!-- Simulation -->
+          <div class="card">
+            <div class="config-section-header collapse-toggle open" onclick="toggleSection(this)">
+              <i class="fas fa-chevron-right arrow"></i> com1DFA Simulation
+            </div>
+            <div class="section-body">
+              <div class="config-param">
+                <div><div class="config-key">friction_model</div><div class="config-doc">Friction model for dense flow simulation</div></div>
+                <div>
+                  <select class="param-input" id="p-sim-friction" data-path="simulation.friction_model">
+                    <option value="samosATAuto" selected>samosATAuto (auto by volume, recommended)</option>
+                    <option value="samosAT">samosAT (standard calibration)</option>
+                    <option value="samosATSmall">samosATSmall (volumes &lt; 25k m3)</option>
+                    <option value="samosATMedium">samosATMedium (volumes &lt; 60k m3)</option>
+                    <option value="Voellmy">Voellmy (mu + xi)</option>
+                    <option value="Coulomb">Coulomb (mu only)</option>
+                  </select>
+                </div>
+              </div>
+              <div class="config-param">
+                <div><div class="config-key">mesh_cell_size_m</div><div class="config-doc">Computational mesh resolution (should match or be &gt;= DEM resolution)</div></div>
+                <div>
+                  <select class="param-input" id="p-sim-mesh" data-path="simulation.mesh_cell_size_m">
+                    <option value="2">2 m (very high detail, very slow)</option>
+                    <option value="5">5 m (recommended for production)</option>
+                    <option value="10">10 m (good for testing / large domains)</option>
+                    <option value="15" selected>15 m (fast screening)</option>
+                    <option value="25">25 m (very fast, low detail)</option>
+                  </select>
+                </div>
+              </div>
+              <div class="config-param">
+                <div><div class="config-key">t_end_s</div><div class="config-doc">Maximum simulation time in seconds</div></div>
+                <div>
+                  <select class="param-input" id="p-sim-tend" data-path="simulation.t_end_s">
+                    <option value="200" selected>200 s (short paths / testing)</option>
+                    <option value="400">400 s (default)</option>
+                    <option value="600">600 s (large domains)</option>
+                    <option value="1000">1000 s (very long runout)</option>
+                  </select>
+                </div>
+              </div>
+              <div class="config-param">
+                <div><div class="config-key">snow_density</div><div class="config-doc">Snow density in kg/m3 (typical: 200-300)</div></div>
+                <div><input type="number" step="10" class="param-input" id="p-sim-rho" value="200" data-path="simulation.snow_density"></div>
+              </div>
+              <div class="config-param">
+                <div><div class="config-key">res_type</div><div class="config-doc">Output result types (ppr=pressure, pft=flow thickness, pfv=velocity)</div></div>
+                <div>
+                  <select class="param-input" id="p-sim-res" data-path="simulation.res_type">
+                    <option value="ppr|pft|pfv" selected>ppr | pft | pfv (all three)</option>
+                    <option value="ppr|pft">ppr | pft (pressure + thickness)</option>
+                    <option value="ppr">ppr only (pressure)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Dashboard -->
+          <div class="card">
+            <div class="config-section-header collapse-toggle open" onclick="toggleSection(this)">
+              <i class="fas fa-chevron-right arrow"></i> Dashboard Output
+            </div>
+            <div class="section-body">
+              <div class="config-param">
+                <div><div class="config-key">generate</div><div class="config-doc">Generate interactive Leaflet dashboard after simulation</div></div>
+                <div>
+                  <select class="param-input" id="p-dash-gen" data-path="dashboard.generate">
+                    <option value="true" selected>Yes</option>
+                    <option value="false">No</option>
+                  </select>
+                </div>
+              </div>
+              <div class="config-param">
+                <div><div class="config-key">title</div><div class="config-doc">Dashboard title (auto-generated from project name if empty)</div></div>
+                <div><input type="text" class="param-input" id="p-dash-title" value="" placeholder="auto" data-path="dashboard.title"></div>
+              </div>
+              <div class="config-param">
+                <div><div class="config-key">downsample</div><div class="config-doc">Downsample factor for overlay PNGs (2 = half resolution, smaller file)</div></div>
+                <div>
+                  <select class="param-input" id="p-dash-ds" data-path="dashboard.downsample">
+                    <option value="1">1 (full resolution, large file)</option>
+                    <option value="2" selected>2 (recommended)</option>
+                    <option value="4">4 (small file, lower quality)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== YAML TAB ===== -->
+        <div id="ptab-yaml" class="pipeline-tab-content" style="display:none;">
+          <div class="card">
+            <div class="card-title">
+              <i class="fas fa-file-code" style="color: var(--warning);"></i> Raw YAML Config
+              <div style="margin-left: auto; display: flex; gap: 6px;">
+                <button class="btn btn-outline btn-sm" onclick="syncFormToYaml()">
+                  <i class="fas fa-arrow-down"></i> Form → YAML
+                </button>
+                <button class="btn btn-outline btn-sm" onclick="validatePipelineConfig()">
+                  <i class="fas fa-check"></i> Validate
+                </button>
+              </div>
+            </div>
+            <div id="pipeline-validation" style="margin-bottom: 8px;"></div>
+            <textarea id="pipeline-config" class="form-input" rows="24"
+              style="font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 0.8rem; line-height: 1.5; resize: vertical; white-space: pre; overflow-wrap: normal; overflow-x: auto;"></textarea>
+          </div>
+        </div>
+
+        <!-- Run button -->
+        <div class="card" style="margin-top: 8px;">
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <button class="btn btn-success" id="btn-pipeline-run" onclick="startPipeline()">
+              <i class="fas fa-play"></i> Run Pipeline
+            </button>
+            <span style="font-size: 0.8rem; color: var(--text-muted);">
+              Domain → DEM → Snow → Release Areas → Simulation → Dashboard
+            </span>
+          </div>
+        </div>
+
+        <!-- Step progress -->
+        <div id="pipeline-progress" style="display: none;">
+          <div class="card">
+            <div class="card-title">
+              <i class="fas fa-tasks" style="color: var(--success);"></i> Pipeline Progress
+              <span id="pipeline-status-badge" class="badge badge-running" style="margin-left: 8px;">
+                <span class="spinner"></span> Running
+              </span>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin-bottom: 16px;">
+              <div class="pipeline-step-card" id="pstep-1" data-step="1"><div class="step-num">1</div><div class="step-label">Domain</div></div>
+              <div class="pipeline-step-card" id="pstep-2" data-step="2"><div class="step-num">2</div><div class="step-label">DEM</div></div>
+              <div class="pipeline-step-card" id="pstep-3" data-step="3"><div class="step-num">3</div><div class="step-label">Snow</div></div>
+              <div class="pipeline-step-card" id="pstep-4" data-step="4"><div class="step-num">4</div><div class="step-label">Release</div></div>
+              <div class="pipeline-step-card" id="pstep-5" data-step="5"><div class="step-num">5</div><div class="step-label">Simulation</div></div>
+              <div class="pipeline-step-card" id="pstep-6" data-step="6"><div class="step-num">6</div><div class="step-label">Dashboard</div></div>
+            </div>
+            <div id="pipeline-log" class="log-viewer"></div>
+          </div>
+        </div>
+
+        <!-- Dashboard link -->
+        <div id="pipeline-result" style="display: none;">
+          <div class="card">
+            <div class="card-title"><i class="fas fa-map" style="color: var(--success);"></i> Dashboard Ready</div>
+            <div id="pipeline-result-content"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==================== RUN PAGE ==================== -->
+      <div id="page-run" class="page">
+        <div class="card">
+          <div class="card-title"><i class="fas fa-play-circle" style="color: var(--accent);"></i> Select Workflow</div>
+          <div class="card-description" style="margin-bottom: 16px;">
+            Choose a simulation workflow to run. Make sure your project is set up with the required input files.
+          </div>
+          <div class="grid-2" id="workflow-cards"></div>
+        </div>
+
+        <div id="run-config-section" style="display: none;">
+          <div class="card">
+            <div class="card-title">
+              <i class="fas fa-cog" style="color: var(--warning);"></i>
+              <span id="run-workflow-name"></span> - Quick Config
+            </div>
+            <div id="run-quick-config"></div>
+            <div style="margin-top: 16px; display: flex; gap: 8px;">
+              <button class="btn btn-success" id="btn-run" onclick="startRun()">
+                <i class="fas fa-play"></i> Run Simulation
+              </button>
+              <button class="btn btn-outline" onclick="showWorkflowDocs()">
+                <i class="fas fa-book"></i> View Documentation
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div id="run-log-section" style="display: none;">
+          <div class="card">
+            <div class="card-title">
+              <i class="fas fa-terminal" style="color: var(--success);"></i>
+              Simulation Log
+              <span id="run-status-badge" class="badge badge-running" style="margin-left: 8px;">
+                <span class="spinner"></span> Running
+              </span>
+            </div>
+            <div id="run-log" class="log-viewer"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==================== RESULTS PAGE ==================== -->
+      <div id="page-results" class="page">
+        <div class="card">
+          <div class="card-title"><i class="fas fa-chart-bar" style="color: var(--accent);"></i> Simulation Results</div>
+          <div class="card-description" style="margin-bottom: 16px;">
+            Browse output files from your simulation runs. Click on image files to preview them.
+          </div>
+          <button class="btn btn-outline" onclick="loadResults()">
+            <i class="fas fa-sync-alt"></i> Refresh Results
+          </button>
+        </div>
+        <div id="results-content"></div>
+        <div id="results-preview" style="display: none;">
+          <div class="card">
+            <div class="card-title"><i class="fas fa-image" style="color: var(--accent);"></i> Preview</div>
+            <div id="preview-container" style="text-align: center;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==================== DOCS PAGE ==================== -->
+      <div id="page-docs" class="page">
+        <div class="card">
+          <div class="card-title"><i class="fas fa-book" style="color: var(--accent);"></i> Documentation</div>
+          <div class="tabs" id="docs-tabs">
+            <div class="tab active" onclick="showDocsSection('setup')">Project Setup</div>
+            <div class="tab" onclick="showDocsSection('running')">Running Simulations</div>
+            <div class="tab" onclick="showDocsSection('configuration')">Configuration</div>
+            <div class="tab" onclick="showDocsSection('results')">Understanding Results</div>
+            <div class="tab" onclick="showDocsSection('modules')">Module Reference</div>
+          </div>
+        </div>
+        <div id="docs-content" class="docs-content"></div>
+      </div>
+
+      <!-- ==================== ABOUT PAGE ==================== -->
+      <div id="page-about" class="page">
+        <div class="card">
+          <div class="card-title"><i class="fas fa-mountain" style="color: var(--accent);"></i> About AvaFrame</div>
+          <div class="docs-content">
+            <p><strong>AvaFrame</strong> (The Open Avalanche Framework) is an open-source collection of tools for avalanche simulation, analysis, and hazard mapping.</p>
+            <h3>Modules</h3>
+            <ul>
+              <li><strong>com1DFA</strong> - Dense Flow Avalanche: SPH-based particle simulation for detailed avalanche dynamics</li>
+              <li><strong>com2AB</strong> - Alpha-Beta Model: Statistical runout prediction from path profile</li>
+              <li><strong>com3Hybrid</strong> - Hybrid Model: Combines com1DFA and com2AB iteratively</li>
+              <li><strong>com4FlowPy</strong> - Flow-Py: Rapid flow path propagation for hazard screening</li>
+              <li><strong>com5SnowSlide</strong> - Snow Slide: Small slide simulation with cohesion</li>
+              <li><strong>com6RockAvalanche</strong> - Rock Avalanche: Rock avalanche dynamics (experimental)</li>
+              <li><strong>ana3AIMEC</strong> - AIMEC: Automated model evaluation and comparison</li>
+              <li><strong>ana4Stats</strong> - Probabilistic Analysis: Parameter variation and probability maps</li>
+            </ul>
+            <h3>Links</h3>
+            <ul>
+              <li><a href="https://docs.avaframe.org" target="_blank" style="color: var(--accent);">Official Documentation</a></li>
+              <li><a href="https://github.com/avaframe/AvaFrame" target="_blank" style="color: var(--accent);">GitHub Repository</a></li>
+              <li><a href="https://mountainfutures.ch" target="_blank" style="color: var(--accent);">Mountain Futures</a></li>
+            </ul>
+            <h3>This Web UI</h3>
+            <p>This interface provides a user-friendly way to configure and run AvaFrame simulations without writing Python code. It connects to your locally installed AvaFrame package.</p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Toast container -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- Workflow docs modal -->
+  <div id="modal-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:100; display:none; align-items:center; justify-content:center;">
+    <div style="background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 12px; max-width: 700px; width: 90%; max-height: 80vh; overflow-y: auto; padding: 24px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 16px;">
+        <h2 id="modal-title" style="margin:0; font-size:1.1rem;"></h2>
+        <button class="btn btn-outline btn-sm" onclick="closeModal()"><i class="fas fa-times"></i></button>
+      </div>
+      <div id="modal-body" class="docs-content"></div>
+    </div>
+  </div>
+
+<script>
+// ============================================================
+// Base path (for reverse proxy subpath deployment)
+// ============================================================
+const BASE = document.querySelector('meta[name="base-path"]')?.content || '';
+function api(path) { return BASE + path; }
+
+// ============================================================
+// State
+// ============================================================
+let currentPage = 'project';
+let projectDir = '';
+let currentWorkflow = null;
+let currentRunId = null;
+let configData = {};       // moduleId -> parsed config
+let configOverrides = {};  // moduleId:section -> {key: value}
+let modules = {};
+let workflows = {};
+
+// ============================================================
+// Navigation
+// ============================================================
+function showPage(page) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+
+  document.getElementById('page-' + page).classList.add('active');
+  event.currentTarget.classList.add('active');
+  currentPage = page;
+
+  const titles = {
+    project: 'Project Setup',
+    config: 'Configuration',
+    pipeline: 'Unified Pipeline',
+    run: 'Run Simulation',
+    results: 'Results',
+    docs: 'Documentation',
+    about: 'About'
+  };
+  document.getElementById('page-title').textContent = titles[page] || page;
+
+  if (page === 'config') loadConfigTabs();
+  if (page === 'run') loadWorkflows();
+  if (page === 'results') loadResults();
+  if (page === 'docs') showDocsSection('setup');
+}
+
+// ============================================================
+// Project
+// ============================================================
+function loadProject() {
+  projectDir = document.getElementById('ava-dir').value.trim();
+  if (!projectDir) { toast('Please enter a project directory', 'warning'); return; }
+
+  fetch(BASE + '/api/project/info?dir=' + encodeURIComponent(projectDir))
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) { toast(data.error, 'error'); return; }
+      document.getElementById('project-indicator').textContent = projectDir.split('/').pop();
+      document.getElementById('project-indicator').style.color = 'var(--success)';
+      renderProjectInfo(data);
+      toast('Project loaded', 'success');
+    })
+    .catch(e => toast('Error: ' + e, 'error'));
+}
+
+function initProject() {
+  projectDir = document.getElementById('ava-dir').value.trim();
+  if (!projectDir) { toast('Please enter a directory path', 'warning'); return; }
+
+  fetch(BASE + '/api/project/init', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({avalancheDir: projectDir})
+  })
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) { toast(data.error, 'error'); return; }
+      toast('Project initialized!', 'success');
+      loadProject();
+    })
+    .catch(e => toast('Error: ' + e, 'error'));
+}
+
+function renderProjectInfo(data) {
+  document.getElementById('project-info').style.display = 'block';
+
+  // Input files
+  let inputHtml = '';
+  const inputOrder = ['DEM', 'REL', 'ENT', 'RES', 'SECREL', 'LINES', 'POINTS', 'DAM', 'RASTERS'];
+  for (const dir of inputOrder) {
+    const files = data.inputs[dir] || [];
+    const icon = files.length > 0 ? 'fa-check-circle' : 'fa-circle';
+    const color = files.length > 0 ? 'var(--success)' : 'var(--text-muted)';
+    inputHtml += `<div class="file-tree-dir" style="color: ${color}">
+      <i class="fas ${icon}"></i> <strong>${dir}/</strong>
+      <span style="color: var(--text-muted); font-size: 0.75rem;">(${files.length} files)</span>
+    </div>`;
+    for (const f of files) {
+      inputHtml += `<div class="file-tree-file"><i class="fas fa-file"></i> ${f}</div>`;
+    }
+  }
+  document.getElementById('input-files-list').innerHTML = inputHtml || '<div style="color: var(--text-muted);">No input files found</div>';
+
+  // Output files
+  let outputHtml = '';
+  for (const [mod, subdirs] of Object.entries(data.outputs || {})) {
+    outputHtml += `<div class="file-tree-dir"><i class="fas fa-folder"></i> <strong>${mod}/</strong></div>`;
+    for (const [subdir, files] of Object.entries(subdirs)) {
+      if (subdir !== '.') {
+        outputHtml += `<div class="file-tree-dir" style="padding-left: 16px;"><i class="fas fa-folder-open"></i> ${subdir}/</div>`;
+      }
+      for (const f of files) {
+        const fullPath = `${projectDir}/Outputs/${mod}/${subdir === '.' ? '' : subdir + '/'}${f}`;
+        const isImage = /\.(png|jpg|jpeg|svg)$/i.test(f);
+        if (isImage) {
+          outputHtml += `<div class="file-tree-file" style="padding-left: ${subdir === '.' ? 24 : 40}px;">
+            <i class="fas fa-image" style="color: var(--accent);"></i>
+            <a href="#" onclick="previewFile('${fullPath}'); return false;">${f}</a>
+          </div>`;
+        } else {
+          outputHtml += `<div class="file-tree-file" style="padding-left: ${subdir === '.' ? 24 : 40}px;">
+            <i class="fas fa-file"></i> ${f}
+          </div>`;
+        }
+      }
+    }
+  }
+  document.getElementById('output-files-list').innerHTML = outputHtml || '<div style="color: var(--text-muted);">No outputs yet</div>';
+}
+
+// ============================================================
+// Configuration
+// ============================================================
+function loadConfigTabs() {
+  fetch(BASE + '/api/modules')
+    .then(r => r.json())
+    .then(data => {
+      modules = data;
+      const tabsEl = document.getElementById('config-tabs');
+      let tabsHtml = '';
+      let first = true;
+      for (const [id, mod] of Object.entries(data)) {
+        const shortName = mod.name.split(' - ')[0].replace('Generate ', '').replace(' Settings', '');
+        tabsHtml += `<div class="tab ${first ? 'active' : ''}" onclick="loadModuleConfig('${id}', this)">${shortName}</div>`;
+        first = false;
+      }
+      tabsEl.innerHTML = tabsHtml;
+
+      // Load first module config
+      const firstId = Object.keys(data)[0];
+      if (firstId) loadModuleConfig(firstId);
+    });
+}
+
+function loadModuleConfig(moduleId, tabEl) {
+  if (tabEl) {
+    document.querySelectorAll('#config-tabs .tab').forEach(t => t.classList.remove('active'));
+    tabEl.classList.add('active');
+  }
+
+  fetch(BASE + '/api/config/' + moduleId)
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) { toast(data.error, 'error'); return; }
+      configData[moduleId] = data;
+      renderModuleConfig(moduleId, data);
+    });
+}
+
+function renderModuleConfig(moduleId, data) {
+  const container = document.getElementById('config-content');
+  let html = `
+    <div class="card">
+      <div class="card-description">${data.module.description}</div>
+      <div style="margin-top: 12px; display: flex; gap: 8px;">
+        <button class="btn btn-outline btn-sm" onclick="saveLocalConfig('${moduleId}')">
+          <i class="fas fa-save"></i> Save as Local Config
+        </button>
+        <button class="btn btn-outline btn-sm" onclick="resetConfig('${moduleId}')">
+          <i class="fas fa-undo"></i> Reset All
+        </button>
+      </div>
+    </div>`;
+
+  for (const [sectionName, section] of Object.entries(data.sections)) {
+    html += `<div class="config-section">
+      <div class="config-section-header collapse-toggle open" onclick="toggleSection(this)">
+        <i class="fas fa-chevron-right arrow"></i> [${sectionName}]
+        ${section._doc ? `<span style="font-weight:400; color:var(--text-muted); font-size:0.8rem; margin-left: 8px;">${section._doc.split('\\n')[0]}</span>` : ''}
+      </div>
+      <div class="section-body">`;
+
+    for (const param of section.params) {
+      const overrideKey = `${moduleId}:${sectionName}`;
+      const currentVal = (configOverrides[overrideKey] && configOverrides[overrideKey][param.key] !== undefined)
+        ? configOverrides[overrideKey][param.key]
+        : param.value;
+      const isModified = configOverrides[overrideKey] && configOverrides[overrideKey][param.key] !== undefined;
+
+      html += `<div class="config-param">
+        <div>
+          <div class="config-key">${param.key}</div>
+          ${param.doc ? `<div class="config-doc">${escapeHtml(param.doc)}</div>` : ''}
+        </div>
+        <div>
+          <div class="param-value-row">
+            <input type="text" class="param-input ${isModified ? 'modified' : ''}"
+                   value="${escapeHtml(currentVal)}"
+                   data-default="${escapeHtml(param.value)}"
+                   data-module="${moduleId}" data-section="${sectionName}" data-key="${param.key}"
+                   onchange="onParamChange(this)">
+          </div>
+          <div class="param-default">default: ${param.value || '(empty)'}</div>
+        </div>
+      </div>`;
+    }
+    html += `</div></div>`;
+  }
+
+  container.innerHTML = html;
+}
+
+function onParamChange(input) {
+  const mod = input.dataset.module;
+  const section = input.dataset.section;
+  const key = input.dataset.key;
+  const defaultVal = input.dataset.default;
+  const newVal = input.value;
+
+  const overrideKey = `${mod}:${section}`;
+
+  if (newVal !== defaultVal) {
+    if (!configOverrides[overrideKey]) configOverrides[overrideKey] = {};
+    configOverrides[overrideKey][key] = newVal;
+    input.classList.add('modified');
+  } else {
+    if (configOverrides[overrideKey]) {
+      delete configOverrides[overrideKey][key];
+      if (Object.keys(configOverrides[overrideKey]).length === 0) delete configOverrides[overrideKey];
+    }
+    input.classList.remove('modified');
+  }
+}
+
+function resetConfig(moduleId) {
+  // Remove all overrides for this module
+  for (const key of Object.keys(configOverrides)) {
+    if (key.startsWith(moduleId + ':')) delete configOverrides[key];
+  }
+  if (configData[moduleId]) renderModuleConfig(moduleId, configData[moduleId]);
+  toast('Configuration reset to defaults', 'success');
+}
+
+function saveLocalConfig(moduleId) {
+  if (!projectDir) { toast('Load a project first', 'warning'); return; }
+
+  const overrides = {};
+  for (const [key, params] of Object.entries(configOverrides)) {
+    if (key.startsWith(moduleId + ':')) {
+      const section = key.split(':')[1];
+      overrides[section] = params;
+    }
+  }
+
+  if (Object.keys(overrides).length === 0) {
+    toast('No changes to save', 'warning');
+    return;
+  }
+
+  fetch(BASE + '/api/project/save_local_config', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({dir: projectDir, module: moduleId, overrides: overrides})
+  })
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) { toast(data.error, 'error'); return; }
+      toast('Saved to ' + data.path.split('/').pop(), 'success');
+    });
+}
+
+function toggleSection(el) {
+  el.classList.toggle('open');
+  const body = el.nextElementSibling;
+  body.style.display = body.style.display === 'none' ? 'block' : 'none';
+}
+
+// ============================================================
+// Workflows / Run
+// ============================================================
+function loadWorkflows() {
+  fetch(BASE + '/api/workflows')
+    .then(r => r.json())
+    .then(data => {
+      workflows = data;
+      const container = document.getElementById('workflow-cards');
+      let html = '';
+      for (const [id, wf] of Object.entries(data)) {
+        html += `<div class="workflow-card ${currentWorkflow === id ? 'selected' : ''}"
+                      onclick="selectWorkflow('${id}')">
+          <h3>${wf.name}</h3>
+          <p>${wf.description}</p>
+          <div style="margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
+            Required: ${wf.required_inputs.join(', ')}
+            ${wf.optional_inputs.length ? ' | Optional: ' + wf.optional_inputs.join(', ') : ''}
+          </div>
+        </div>`;
+      }
+      container.innerHTML = html;
+    });
+}
+
+function selectWorkflow(id) {
+  currentWorkflow = id;
+  document.querySelectorAll('.workflow-card').forEach(c => c.classList.remove('selected'));
+  event.currentTarget.classList.add('selected');
+
+  const wf = workflows[id];
+  document.getElementById('run-config-section').style.display = 'block';
+  document.getElementById('run-workflow-name').textContent = wf.name;
+
+  // Show quick config (key parameters)
+  const quickParams = getQuickParams(id);
+  let html = '<div style="font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 12px;">Key parameters (modify in Configuration tab for full control):</div>';
+  html += '<div class="grid-2">';
+  for (const p of quickParams) {
+    html += `<div class="form-group">
+      <label class="form-label">${p.key} <span style="color: var(--text-muted);">- ${p.doc}</span></label>
+      <input type="text" class="form-input" value="${p.value}"
+             data-module="${p.module}" data-section="${p.section}" data-key="${p.key}"
+             onchange="onParamChange(this)">
+    </div>`;
+  }
+  html += '</div>';
+  document.getElementById('run-quick-config').innerHTML = html;
+}
+
+function getQuickParams(workflowId) {
+  const params = {
+    com1DFA: [
+      {module: 'com1DFA', section: 'GENERAL', key: 'meshCellSize', value: '5', doc: 'Cell size [m]'},
+      {module: 'com1DFA', section: 'GENERAL', key: 'frictModel', value: 'samosATAuto', doc: 'Friction model'},
+      {module: 'com1DFA', section: 'GENERAL', key: 'tEnd', value: '400', doc: 'End time [s]'},
+      {module: 'com1DFA', section: 'GENERAL', key: 'rho', value: '200', doc: 'Snow density [kg/m3]'},
+      {module: 'com1DFA', section: 'GENERAL', key: 'resType', value: 'ppr|pft|pfv', doc: 'Output types'},
+      {module: 'com1DFA', section: 'GENERAL', key: 'dt', value: '0.1', doc: 'Time step [s]'},
+    ],
+    com2AB: [
+      {module: 'com2AB', section: 'ABSETUP', key: 'smallAva', value: 'False', doc: 'Small avalanche calibration'},
+      {module: 'com2AB', section: 'ABSETUP', key: 'distance', value: '10', doc: 'Resampling step [m]'},
+    ],
+    com4FlowPy: [
+      {module: 'com4FlowPy', section: 'GENERAL', key: 'alpha', value: '25', doc: 'Angle of reach [deg]'},
+      {module: 'com4FlowPy', section: 'GENERAL', key: 'exp', value: '8', doc: 'Spreading coefficient'},
+      {module: 'com4FlowPy', section: 'GENERAL', key: 'flux_threshold', value: '3.0e-4', doc: 'Flux threshold'},
+      {module: 'com4FlowPy', section: 'GENERAL', key: 'max_z', value: '8848', doc: 'Energy height limit [m]'},
+    ],
+    operational: [
+      {module: 'com1DFA', section: 'GENERAL', key: 'meshCellSize', value: '5', doc: 'Cell size [m]'},
+      {module: 'com1DFA', section: 'GENERAL', key: 'frictModel', value: 'samosATAuto', doc: 'Friction model'},
+      {module: 'com1DFA', section: 'GENERAL', key: 'tEnd', value: '400', doc: 'End time [s]'},
+      {module: 'com1DFA', section: 'GENERAL', key: 'rho', value: '200', doc: 'Snow density [kg/m3]'},
+    ],
+    probAna: [
+      {module: 'ana4Stats', section: 'PROBRUN', key: 'varParList', value: 'relTh|musamosat', doc: 'Parameters to vary'},
+      {module: 'ana4Stats', section: 'PROBRUN', key: 'nSample', value: '40', doc: 'Number of samples'},
+      {module: 'ana4Stats', section: 'PROBRUN', key: 'sampleMethod', value: 'latin', doc: 'Sampling method'},
+    ],
+  };
+  return params[workflowId] || [];
+}
+
+function startRun() {
+  if (!projectDir) { toast('Load a project first', 'warning'); return; }
+  if (!currentWorkflow) { toast('Select a workflow first', 'warning'); return; }
+
+  const btn = document.getElementById('btn-run');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Starting...';
+
+  fetch(BASE + '/api/run', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      workflow: currentWorkflow,
+      avalancheDir: projectDir,
+      configOverrides: configOverrides
+    })
+  })
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) { toast(data.error, 'error'); btn.disabled = false; btn.innerHTML = '<i class="fas fa-play"></i> Run Simulation'; return; }
+      currentRunId = data.run_id;
+      document.getElementById('run-log-section').style.display = 'block';
+      document.getElementById('run-log').textContent = '';
+      document.getElementById('run-status-badge').className = 'badge badge-running';
+      document.getElementById('run-status-badge').innerHTML = '<span class="spinner"></span> Running';
+      toast('Simulation started!', 'success');
+      pollRunStatus();
+    })
+    .catch(e => {
+      toast('Error: ' + e, 'error');
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-play"></i> Run Simulation';
+    });
+}
+
+function pollRunStatus() {
+  if (!currentRunId) return;
+
+  const logEl = document.getElementById('run-log');
+  let offset = 0;
+
+  const poll = () => {
+    fetch(`/api/run/${currentRunId}/status?offset=${offset}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.error) return;
+
+        for (const line of data.log_lines) {
+          const lineEl = document.createElement('div');
+          lineEl.textContent = line;
+          if (line.includes('ERROR') || line.includes('error') || line.includes('Traceback')) {
+            lineEl.className = 'log-line-error';
+          } else if (line.includes('WARNING') || line.includes('warning')) {
+            lineEl.className = 'log-line-warn';
+          } else if (line.includes('INFO')) {
+            lineEl.className = 'log-line-info';
+          } else if (line.includes('DEBUG')) {
+            lineEl.className = 'log-line-debug';
+          }
+          logEl.appendChild(lineEl);
+        }
+        offset = data.total_lines;
+        logEl.scrollTop = logEl.scrollHeight;
+
+        if (data.status === 'running') {
+          setTimeout(poll, 500);
+        } else {
+          const badge = document.getElementById('run-status-badge');
+          const btn = document.getElementById('btn-run');
+          if (data.status === 'complete') {
+            badge.className = 'badge badge-complete';
+            badge.innerHTML = '<i class="fas fa-check"></i> Complete';
+            toast('Simulation complete!', 'success');
+          } else {
+            badge.className = 'badge badge-error';
+            badge.innerHTML = '<i class="fas fa-times"></i> Error';
+            toast('Simulation failed', 'error');
+          }
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fas fa-play"></i> Run Simulation';
+        }
+      })
+      .catch(() => setTimeout(poll, 2000));
+  };
+  poll();
+}
+
+// ============================================================
+// Results
+// ============================================================
+function loadResults() {
+  if (!projectDir) {
+    document.getElementById('results-content').innerHTML = '<div class="card"><div class="card-description">Load a project first to view results.</div></div>';
+    return;
+  }
+
+  fetch(BASE + '/api/results/files?dir=' + encodeURIComponent(projectDir))
+    .then(r => r.json())
+    .then(data => {
+      let html = '';
+      if (Object.keys(data).length === 0) {
+        html = '<div class="card"><div class="card-description">No output files found. Run a simulation first.</div></div>';
+      } else {
+        for (const [dir, files] of Object.entries(data).sort()) {
+          html += `<div class="card">
+            <div class="card-title collapse-toggle open" onclick="toggleSection(this)">
+              <i class="fas fa-chevron-right arrow"></i>
+              <i class="fas fa-folder" style="color: var(--warning);"></i> ${dir}
+              <span style="font-weight: 400; color: var(--text-muted); font-size: 0.8rem;">(${files.length} files)</span>
+            </div>
+            <div class="section-body">
+              <div style="display: flex; flex-wrap: wrap; gap: 8px;">`;
+
+          for (const f of files) {
+            const fullPath = `${projectDir}/Outputs/${dir}/${f}`;
+            const isImage = /\.(png|jpg|jpeg|svg)$/i.test(f);
+            const isPeak = /\.(asc|tif)$/i.test(f);
+            const icon = isImage ? 'fa-image' : isPeak ? 'fa-map' : 'fa-file';
+            const color = isImage ? 'var(--accent)' : isPeak ? 'var(--success)' : 'var(--text-muted)';
+
+            html += `<div style="font-size: 0.8rem; padding: 4px 8px; background: var(--bg-primary); border-radius: 4px; display: flex; align-items: center; gap: 4px;">
+              <i class="fas ${icon}" style="color: ${color};"></i>`;
+
+            if (isImage) {
+              html += `<a href="#" onclick="previewFile('${fullPath}'); return false;" style="color: var(--accent); text-decoration: none;">${f}</a>`;
+            } else {
+              html += `<span style="color: var(--text-secondary);">${f}</span>`;
+            }
+            html += `</div>`;
+          }
+          html += '</div></div></div>';
+        }
+      }
+      document.getElementById('results-content').innerHTML = html;
+    })
+    .catch(e => toast('Error loading results: ' + e, 'error'));
+}
+
+function previewFile(path) {
+  const container = document.getElementById('preview-container');
+  const section = document.getElementById('results-preview');
+  section.style.display = 'block';
+
+  if (/\.(png|jpg|jpeg|svg)$/i.test(path)) {
+    container.innerHTML = `<img src="${BASE}/api/results/file?path=${encodeURIComponent(path)}" style="max-width: 100%; border-radius: 4px;">
+      <div style="margin-top: 8px; font-size: 0.8rem; color: var(--text-muted);">${path.split('/').pop()}</div>`;
+  } else {
+    container.innerHTML = `<div style="color: var(--text-muted);">Preview not available for this file type.</div>`;
+  }
+
+  section.scrollIntoView({behavior: 'smooth'});
+}
+
+// ============================================================
+// Documentation
+// ============================================================
+function showDocsSection(section) {
+  document.querySelectorAll('#docs-tabs .tab').forEach(t => t.classList.remove('active'));
+  event.currentTarget.classList.add('active');
+
+  if (section === 'modules') {
+    renderModuleDocs();
+    return;
+  }
+
+  fetch(BASE + '/api/docs/general')
+    .then(r => r.json())
+    .then(data => {
+      const sectionMap = {
+        setup: 'project_setup',
+        running: 'running',
+        configuration: 'configuration',
+        results: 'results'
+      };
+      const key = sectionMap[section];
+      if (key && data[key]) {
+        document.getElementById('docs-content').innerHTML = `
+          <div class="card">
+            <div class="docs-content">${markdownToHtml(data[key].content)}</div>
+          </div>`;
+      }
+    });
+}
+
+function renderModuleDocs() {
+  let html = '';
+  const workflowIds = ['com1DFA', 'com2AB', 'com4FlowPy', 'operational', 'probAna'];
+
+  Promise.all(workflowIds.map(id =>
+    fetch(`/api/docs/workflow/${id}`).then(r => r.json()).then(d => ({id, ...d}))
+  )).then(docs => {
+    for (const doc of docs) {
+      if (doc.error) continue;
+      html += `<div class="card">
+        <div class="card-title" style="color: var(--accent);">${doc.title}</div>
+        <div class="docs-content">
+          <p>${doc.overview}</p>
+          <h3>Input Requirements</h3>
+          ${markdownToHtml(doc.inputs)}
+          <h3>Key Parameters</h3>
+          ${markdownToHtml(doc.key_parameters)}
+          <h3>Outputs</h3>
+          ${markdownToHtml(doc.outputs)}
+          <h3>Tips</h3>
+          ${markdownToHtml(doc.tips)}
+        </div>
+      </div>`;
+    }
+    document.getElementById('docs-content').innerHTML = html;
+  });
+}
+
+function showWorkflowDocs() {
+  if (!currentWorkflow) return;
+
+  fetch(`/api/docs/workflow/${currentWorkflow}`)
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) { toast('No docs available', 'warning'); return; }
+      document.getElementById('modal-title').textContent = data.title;
+      document.getElementById('modal-body').innerHTML = `
+        <p>${data.overview}</p>
+        <h3>Input Requirements</h3>
+        ${markdownToHtml(data.inputs)}
+        <h3>Key Parameters</h3>
+        ${markdownToHtml(data.key_parameters)}
+        <h3>Outputs</h3>
+        ${markdownToHtml(data.outputs)}
+        <h3>Tips</h3>
+        ${markdownToHtml(data.tips)}
+      `;
+      document.getElementById('modal-overlay').style.display = 'flex';
+    });
+}
+
+function closeModal() {
+  document.getElementById('modal-overlay').style.display = 'none';
+}
+
+// ============================================================
+// Utilities
+// ============================================================
+function escapeHtml(str) {
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function markdownToHtml(md) {
+  if (!md) return '';
+  return md
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/`(.+?)`/g, '<code>$1</code>')
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    .replace(/^- (.+)$/gm, '<li>$1</li>')
+    .replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>')
+    .replace(/^\d+\. (.+)$/gm, '<li>$1</li>')
+    .replace(/\n\n/g, '<br><br>')
+    .replace(/\n/g, '<br>');
+}
+
+function toast(message, type) {
+  const container = document.getElementById('toast-container');
+  const colors = {success: 'var(--success)', error: 'var(--danger)', warning: 'var(--warning)', info: 'var(--accent)'};
+  const icons = {success: 'fa-check-circle', error: 'fa-exclamation-circle', warning: 'fa-exclamation-triangle', info: 'fa-info-circle'};
+
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.style.borderLeftColor = colors[type] || colors.info;
+  el.style.borderLeftWidth = '3px';
+  el.innerHTML = `<i class="fas ${icons[type] || icons.info}" style="color: ${colors[type]}; margin-right: 8px;"></i>${escapeHtml(message)}`;
+  container.appendChild(el);
+
+  setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, 3000);
+}
+
+// ============================================================
+// Pipeline
+// ============================================================
+let pipelineRunId = null;
+
+function showPipelineTab(tab, tabEl) {
+  document.querySelectorAll('#pipeline-tabs .tab').forEach(t => t.classList.remove('active'));
+  if (tabEl) tabEl.classList.add('active');
+  document.querySelectorAll('.pipeline-tab-content').forEach(c => c.style.display = 'none');
+  document.getElementById('ptab-' + tab).style.display = 'block';
+  if (tab === 'yaml') syncFormToYaml();
+}
+
+function toggleDomainMode() {
+  const mode = document.getElementById('p-domain-mode').value;
+  document.getElementById('domain-center-fields').style.display = mode === 'center' ? 'block' : 'none';
+  document.getElementById('domain-bbox-fields').style.display = mode === 'bbox' ? 'block' : 'none';
+  document.getElementById('domain-shp-fields').style.display = mode === 'shapefile' ? 'block' : 'none';
+  // from_dem: hide all domain fields, domain comes from DEM
+}
+
+function toggleDemSource() {
+  const src = document.getElementById('p-dem-source').value;
+  document.getElementById('dem-local-fields').style.display = src === 'local' ? 'block' : 'none';
+}
+
+function toggleSnowSource() {
+  const src = document.getElementById('p-snow-source').value;
+  document.getElementById('snow-fixed-fields').style.display = src === 'fixed' ? 'block' : 'none';
+  document.getElementById('snow-manual-fields').style.display = src === 'manual' ? 'block' : 'none';
+  document.getElementById('snow-era5-fields').style.display = src === 'era5' ? 'block' : 'none';
+}
+
+function buildConfigFromForm() {
+  const cfg = {
+    project: {
+      name: document.getElementById('p-project-name').value || 'my_project',
+      dir: document.getElementById('p-project-dir').value,
+    },
+    domain: {},
+    dem: {
+      source: document.getElementById('p-dem-source').value,
+      target_res_m: parseInt(document.getElementById('p-dem-res').value),
+    },
+    snow: { source: document.getElementById('p-snow-source').value },
+    release: {
+      slope_min_deg: parseFloat(document.getElementById('p-rel-smin').value) || 28,
+      slope_max_deg: parseFloat(document.getElementById('p-rel-smax').value) || 60,
+      min_area_m2: parseInt(document.getElementById('p-rel-area').value) || 2500,
+      simplify_tolerance_m: parseFloat(document.getElementById('p-rel-simp').value) || 5,
+      erode_cells: parseInt(document.getElementById('p-rel-erode').value) || 3,
+    },
+    simulation: {
+      friction_model: document.getElementById('p-sim-friction').value,
+      mesh_cell_size_m: parseInt(document.getElementById('p-sim-mesh').value),
+      t_end_s: parseInt(document.getElementById('p-sim-tend').value),
+      snow_density: parseInt(document.getElementById('p-sim-rho').value) || 200,
+      res_type: document.getElementById('p-sim-res').value,
+    },
+    dashboard: {
+      generate: document.getElementById('p-dash-gen').value === 'true',
+      title: document.getElementById('p-dash-title').value,
+      downsample: parseInt(document.getElementById('p-dash-ds').value),
+    },
+  };
+
+  // Domain
+  const domainMode = document.getElementById('p-domain-mode').value;
+  if (domainMode === 'center') {
+    const latVal = document.getElementById('p-domain-lat').value;
+    const lonVal = document.getElementById('p-domain-lon').value;
+    const lat = parseFloat(latVal);
+    const lon = parseFloat(lonVal);
+    if (!isNaN(lat)) cfg.domain.center_lat = lat;
+    if (!isNaN(lon)) cfg.domain.center_lon = lon;
+    cfg.domain.buffer_m = parseInt(document.getElementById('p-domain-buffer').value) || 6000;
+  } else if (domainMode === 'bbox') {
+    const parts = document.getElementById('p-domain-bbox').value.split(',').map(s => parseFloat(s.trim()));
+    if (parts.length === 4 && parts.every(v => !isNaN(v))) cfg.domain.bbox = parts;
+  } else if (domainMode === 'shapefile') {
+    cfg.domain.shapefile = document.getElementById('p-domain-shp').value;
+  } else if (domainMode === 'from_dem') {
+    cfg.domain.from_dem = true;
+  }
+  const epsg = document.getElementById('p-domain-epsg').value;
+  if (epsg) cfg.domain.target_epsg = parseInt(epsg);
+
+  // DEM local path
+  if (cfg.dem.source === 'local') {
+    cfg.dem.path = document.getElementById('p-dem-path').value;
+  }
+
+  // Snow
+  if (cfg.snow.source === 'fixed') {
+    cfg.snow.thickness_m = parseFloat(document.getElementById('p-snow-thickness').value) || 1.5;
+  } else if (cfg.snow.source === 'manual') {
+    cfg.snow.fracture_depths = {};
+    const d30 = parseFloat(document.getElementById('p-snow-d0-30').value);
+    const d100 = parseFloat(document.getElementById('p-snow-d0-100').value);
+    const d300 = parseFloat(document.getElementById('p-snow-d0-300').value);
+    if (d30) cfg.snow.fracture_depths[30] = d30;
+    if (d100) cfg.snow.fracture_depths[100] = d100;
+    if (d300) cfg.snow.fracture_depths[300] = d300;
+  } else if (cfg.snow.source === 'era5') {
+    const lat = parseFloat(document.getElementById('p-snow-lat').value);
+    const lon = parseFloat(document.getElementById('p-snow-lon').value);
+    if (lat) cfg.snow.latitude = lat;
+    if (lon) cfg.snow.longitude = lon;
+    cfg.snow.grid_elevation_m = parseInt(document.getElementById('p-snow-grid-elev').value) || 2800;
+    cfg.snow.target_elevation_m = parseInt(document.getElementById('p-snow-target-elev').value) || 3000;
+    cfg.snow.mean_slope_deg = parseFloat(document.getElementById('p-snow-slope').value) || 35;
+    cfg.snow.wind_loading_m = parseFloat(document.getElementById('p-snow-wind').value) || 0;
+    cfg.snow.start_year = parseInt(document.getElementById('p-snow-start').value) || 1950;
+    const rpStr = document.getElementById('p-snow-rp').value;
+    cfg.snow.return_periods = rpStr.split(',').map(s => parseInt(s.trim())).filter(v => !isNaN(v));
+  }
+
+  return cfg;
+}
+
+function cfgToYaml(cfg, indent) {
+  indent = indent || 0;
+  let lines = [];
+  const pad = '  '.repeat(indent);
+  for (const [key, val] of Object.entries(cfg)) {
+    if (val === null || val === undefined || val === '') continue;
+    if (typeof val === 'object' && !Array.isArray(val)) {
+      lines.push(pad + key + ':');
+      lines.push(cfgToYaml(val, indent + 1));
+    } else if (Array.isArray(val)) {
+      lines.push(pad + key + ': [' + val.join(', ') + ']');
+    } else if (typeof val === 'boolean') {
+      lines.push(pad + key + ': ' + val);
+    } else if (typeof val === 'string' && val.includes('|')) {
+      lines.push(pad + key + ': "' + val + '"');
+    } else {
+      lines.push(pad + key + ': ' + val);
+    }
+  }
+  return lines.join('\n');
+}
+
+function syncFormToYaml() {
+  const cfg = buildConfigFromForm();
+  document.getElementById('pipeline-config').value = cfgToYaml(cfg);
+}
+
+function handleDemDrop(event) {
+  event.preventDefault();
+  event.currentTarget.style.borderColor = 'var(--border)';
+  event.currentTarget.style.color = 'var(--text-muted)';
+  const file = event.dataTransfer.files[0];
+  if (file) uploadDemFile(file);
+}
+
+function handleDemSelect(event) {
+  const file = event.target.files[0];
+  if (file) uploadDemFile(file);
+}
+
+function uploadDemFile(file) {
+  const dir = document.getElementById('p-project-dir').value;
+  if (!dir) { toast('Set a project directory first', 'warning'); return; }
+
+  const status = document.getElementById('dem-upload-status');
+  status.style.display = 'block';
+  status.style.color = 'var(--accent)';
+  status.innerHTML = '<span class="spinner"></span> Uploading ' + file.name + ' (' + (file.size / 1e6).toFixed(1) + ' MB)...';
+
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('dir', dir);
+  formData.append('subdir', 'Inputs');
+
+  fetch(BASE + '/api/pipeline/upload', { method: 'POST', body: formData })
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) { toast(data.error, 'error'); status.style.display = 'none'; return; }
+      const uploaded = data.uploaded[0] || '';
+      document.getElementById('p-dem-path').value = uploaded;
+      status.style.color = 'var(--success)';
+      status.innerHTML = '<i class="fas fa-check-circle"></i> Uploaded: ' + file.name;
+      toast('DEM uploaded', 'success');
+    })
+    .catch(e => {
+      status.style.color = 'var(--danger)';
+      status.innerHTML = '<i class="fas fa-times-circle"></i> Upload failed';
+      toast('Upload error: ' + e, 'error');
+    });
+}
+
+function loadPipelineTemplate() {
+  fetch(BASE + '/api/pipeline/template')
+    .then(r => r.text())
+    .then(text => {
+      document.getElementById('pipeline-config').value = text;
+      toast('Template loaded', 'success');
+    });
+}
+
+function validatePipelineConfig() {
+  const config = document.getElementById('pipeline-config').value;
+  fetch(BASE + '/api/pipeline/validate', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({config: config})
+  })
+    .then(r => r.json())
+    .then(data => {
+      const el = document.getElementById('pipeline-validation');
+      if (data.errors && data.errors.length > 0) {
+        el.innerHTML = data.errors.map(e =>
+          `<div style="color: var(--danger); font-size: 0.82rem; padding: 2px 0;"><i class="fas fa-exclamation-circle"></i> ${escapeHtml(e)}</div>`
+        ).join('');
+        toast(data.errors.length + ' validation error(s)', 'error');
+      } else {
+        el.innerHTML = '<div style="color: var(--success); font-size: 0.82rem;"><i class="fas fa-check-circle"></i> Config is valid</div>';
+        toast('Config is valid', 'success');
+      }
+    });
+}
+
+function startPipeline() {
+  // Always build from form (most up-to-date)
+  syncFormToYaml();
+  const config = document.getElementById('pipeline-config').value;
+  if (!config.trim()) { toast('Please fill in the configuration', 'warning'); return; }
+
+  const dir = document.getElementById('p-project-dir').value;
+  if (!dir) { toast('Please set a project directory', 'warning'); return; }
+
+  // Validate domain before submitting
+  const domMode = document.getElementById('p-domain-mode').value;
+  if (domMode === 'center') {
+    const lat = document.getElementById('p-domain-lat').value;
+    const lon = document.getElementById('p-domain-lon').value;
+    if (!lat || !lon) { toast('Please enter center latitude and longitude', 'warning'); return; }
+  } else if (domMode === 'bbox') {
+    if (!document.getElementById('p-domain-bbox').value) { toast('Please enter a bounding box', 'warning'); return; }
+  } else if (domMode === 'shapefile') {
+    if (!document.getElementById('p-domain-shp').value) { toast('Please enter a shapefile path', 'warning'); return; }
+  } else if (domMode === 'from_dem') {
+    if (document.getElementById('p-dem-source').value !== 'local') {
+      toast('From DEM extent requires a local DEM file', 'warning'); return;
+    }
+    if (!document.getElementById('p-dem-path').value) {
+      toast('Please provide a DEM path or upload a DEM file', 'warning'); return;
+    }
+  }
+
+  const btn = document.getElementById('btn-pipeline-run');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Starting...';
+
+  fetch(BASE + '/api/pipeline/run', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({config: config})
+  })
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) { toast(data.error, 'error'); btn.disabled = false; btn.innerHTML = '<i class="fas fa-play"></i> Run Pipeline'; return; }
+      pipelineRunId = data.run_id;
+      document.getElementById('pipeline-progress').style.display = 'block';
+      document.getElementById('pipeline-log').textContent = '';
+      document.getElementById('pipeline-status-badge').className = 'badge badge-running';
+      document.getElementById('pipeline-status-badge').innerHTML = '<span class="spinner"></span> Running';
+      document.getElementById('pipeline-result').style.display = 'none';
+      // Reset step cards
+      for (let i = 1; i <= 6; i++) {
+        document.getElementById('pstep-' + i).className = 'pipeline-step-card';
+      }
+      toast('Pipeline started!', 'success');
+      pollPipelineStatus();
+    })
+    .catch(e => {
+      toast('Error: ' + e, 'error');
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-play"></i> Run Pipeline';
+    });
+}
+
+function pollPipelineStatus() {
+  if (!pipelineRunId) return;
+  const logEl = document.getElementById('pipeline-log');
+  let offset = 0;
+
+  const poll = () => {
+    fetch(`/api/pipeline/status/${pipelineRunId}?offset=${offset}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.error) return;
+
+        // Update step cards
+        const currentStep = data.step || 0;
+        for (let i = 1; i <= 6; i++) {
+          const card = document.getElementById('pstep-' + i);
+          if (i < currentStep) card.className = 'pipeline-step-card done';
+          else if (i === currentStep) card.className = 'pipeline-step-card active';
+          else card.className = 'pipeline-step-card';
+        }
+
+        for (const line of data.log_lines) {
+          const lineEl = document.createElement('div');
+          lineEl.textContent = line;
+          if (line.includes('ERROR') || line.includes('Traceback')) lineEl.className = 'log-line-error';
+          else if (line.includes('WARNING')) lineEl.className = 'log-line-warn';
+          else if (line.includes('Step') || line.includes('===')) lineEl.className = 'log-line-info';
+          logEl.appendChild(lineEl);
+        }
+        offset = data.total_lines;
+        logEl.scrollTop = logEl.scrollHeight;
+
+        if (data.status === 'running') {
+          setTimeout(poll, 500);
+        } else {
+          const badge = document.getElementById('pipeline-status-badge');
+          const btn = document.getElementById('btn-pipeline-run');
+          if (data.status === 'complete') {
+            badge.className = 'badge badge-complete';
+            badge.innerHTML = '<i class="fas fa-check"></i> Complete';
+            for (let i = 1; i <= 6; i++) {
+              document.getElementById('pstep-' + i).className = 'pipeline-step-card done';
+            }
+            // Show dashboard link and download
+            const projDir = document.getElementById('p-project-dir').value;
+            document.getElementById('pipeline-result').style.display = 'block';
+            document.getElementById('pipeline-result-content').innerHTML = `
+              <p style="color: var(--text-secondary); margin-bottom: 12px;">Pipeline completed successfully!</p>
+              <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <a href="${BASE}/api/results/file?path=${encodeURIComponent(projDir + '/dashboard.html')}" target="_blank" class="btn btn-primary">
+                  <i class="fas fa-map"></i> Open Dashboard
+                </a>
+                <a href="${BASE}/api/pipeline/results/download?dir=${encodeURIComponent(projDir)}" class="btn btn-outline">
+                  <i class="fas fa-download"></i> Download Results (ZIP)
+                </a>
+              </div>`;
+            toast('Pipeline complete!', 'success');
+          } else {
+            badge.className = 'badge badge-error';
+            badge.innerHTML = '<i class="fas fa-times"></i> Error';
+            if (currentStep > 0) {
+              document.getElementById('pstep-' + currentStep).className = 'pipeline-step-card error';
+            }
+            toast('Pipeline failed at step ' + currentStep, 'error');
+          }
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fas fa-play"></i> Run Pipeline';
+        }
+      })
+      .catch(() => setTimeout(poll, 2000));
+  };
+  poll();
+}
+
+// Load pipeline template on first visit
+(function() {
+  fetch(BASE + '/api/pipeline/template')
+    .then(r => r.text())
+    .then(text => { document.getElementById('pipeline-config').value = text; })
+    .catch(() => {});
+})();
+
+// Close modal on overlay click
+document.getElementById('modal-overlay').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
+
+// Keyboard shortcut
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closeModal();
+});
+</script>
+
+</body>
+</html>

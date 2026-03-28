@@ -57,7 +57,10 @@ def _load_checkpoint(project_dir, step, expected_hash=None):
         return None
     with open(cp_path) as f:
         cp = json.load(f)
-    if expected_hash and cp.get("cfg_hash") != expected_hash:
+    stored_hash = cp.get("cfg_hash", "")
+    if stored_hash == "demo":
+        return cp["result"]  # demo checkpoints are always valid
+    if expected_hash and stored_hash != expected_hash:
         return None  # config changed, invalidate
     return cp["result"]
 

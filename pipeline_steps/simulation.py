@@ -131,6 +131,20 @@ def run_simulations(cfg: dict, thicknesses: dict, project_dir: str,
         "output_dir": str, "n_sims": int}, ...]}``
     """
     project_dir = str(Path(project_dir).resolve())
+
+    # AvaFrame requires exactly one DEM in Inputs/ — remove extras
+    inputs_dir = Path(project_dir) / "Inputs"
+    dem_files = sorted(inputs_dir.glob("*.tif")) + sorted(inputs_dir.glob("*.asc"))
+    if len(dem_files) > 1:
+        # Keep only "dem.tif" (pipeline-generated), remove others
+        keep = [f for f in dem_files if f.name == "dem.tif"]
+        if not keep:
+            keep = [dem_files[0]]  # fallback: keep the first one
+        for f in dem_files:
+            if f not in keep:
+                log_fn(f"[sim] Removing extra DEM: {f.name}")
+                f.unlink()
+
     snow_source = cfg.get("snow", {}).get("source", "fixed")
     is_single = (snow_source == "fixed")
 

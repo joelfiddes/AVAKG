@@ -1202,14 +1202,4 @@ if __name__ == "__main__":
     print("  AvaFrame Web UI")
     print("  Open http://localhost:5050 in your browser")
     print("=" * 60)
-    # Support running behind a reverse proxy at a subpath (e.g. /avaframe/)
-    prefix = os.environ.get("AVAFRAME_URL_PREFIX", "")
-    if prefix:
-        from werkzeug.middleware.dispatcher import DispatcherMiddleware
-        from werkzeug.serving import run_simple
-        app.config["APPLICATION_ROOT"] = prefix
-        wrapped = DispatcherMiddleware(Flask("dummy"), {prefix: app})
-        print(f"  URL prefix: {prefix}")
-        run_simple("0.0.0.0", 5050, wrapped, use_reloader=False)
-    else:
-        app.run(host="0.0.0.0", port=5050, debug=False)
+    app.run(host="0.0.0.0", port=5050, debug=False)

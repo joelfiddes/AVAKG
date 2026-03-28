@@ -27,6 +27,7 @@ frictModel = {friction_model}
 tEnd = {t_end}
 meshCellSize = {mesh_cell_size}
 rho = {rho}
+deltaTh = {delta_th}
 
 [INPUT]
 releaseScenario =
@@ -62,6 +63,7 @@ def _write_ini(project_dir: str, cfg: dict, thickness: float | None,
         t_end=sim.get("t_end_s", 600),
         mesh_cell_size=sim.get("mesh_cell_size_m", 5),
         rho=sim.get("snow_density", 200),
+        delta_th=sim.get("delta_th_m", 0.25),
     )
 
     ini_path = Path(project_dir) / "local_com1DFACfg.ini"

@@ -743,9 +743,10 @@
                   <select class="param-input" id="p-sim-mesh" data-path="simulation.mesh_cell_size_m">
                     <option value="2">2 m (very high detail, very slow)</option>
                     <option value="5">5 m (recommended for production)</option>
-                    <option value="10">10 m (good for testing / large domains)</option>
-                    <option value="15" selected>15 m (fast screening)</option>
-                    <option value="25">25 m (very fast, low detail)</option>
+                    <option value="10">10 m (good for testing)</option>
+                    <option value="15">15 m (fast screening)</option>
+                    <option value="25">25 m (very fast)</option>
+                    <option value="50" selected>50 m (demo / rapid test)</option>
                   </select>
                 </div>
               </div>
@@ -758,6 +759,17 @@
                     <option value="400">400 s (default)</option>
                     <option value="600">600 s (large domains)</option>
                     <option value="1000">1000 s (very long runout)</option>
+                  </select>
+                </div>
+              </div>
+              <div class="config-param">
+                <div><div class="config-key">delta_th_m</div><div class="config-doc">Release thickness per particle layer [m]. Higher = fewer particles = faster. Default 0.25</div></div>
+                <div>
+                  <select class="param-input" id="p-sim-deltath" data-path="simulation.delta_th_m">
+                    <option value="0.25">0.25 m (default, high detail)</option>
+                    <option value="0.5">0.5 m (good balance)</option>
+                    <option value="1.0" selected>1.0 m (fast, fewer particles)</option>
+                    <option value="2.0">2.0 m (very fast, coarse)</option>
                   </select>
                 </div>
               </div>
@@ -1706,8 +1718,9 @@ function buildConfigFromForm() {
     },
     simulation: {
       friction_model: document.getElementById('p-sim-friction').value,
-      mesh_cell_size_m: parseInt(document.getElementById('p-sim-mesh').value),
+      mesh_cell_size_m: parseInt(document.getElementById('p-sim-mesh').value) || 15,
       t_end_s: parseInt(document.getElementById('p-sim-tend').value) || 400,
+      delta_th_m: parseFloat(document.getElementById('p-sim-deltath').value) || 0.25,
       snow_density: parseInt(document.getElementById('p-sim-rho').value) || 200,
       res_type: document.getElementById('p-sim-res').value,
     },
@@ -1916,6 +1929,7 @@ function loadDemo() {
       document.getElementById('p-sim-friction').value = cfg.simulation.friction_model;
       document.getElementById('p-sim-mesh').value = cfg.simulation.mesh_cell_size_m;
       document.getElementById('p-sim-tend').value = cfg.simulation.t_end_s;
+      document.getElementById('p-sim-deltath').value = cfg.simulation.delta_th_m || 1.0;
       document.getElementById('p-sim-rho').value = cfg.simulation.snow_density;
       document.getElementById('p-sim-res').value = cfg.simulation.res_type;
       document.getElementById('p-dash-title').value = cfg.dashboard.title;

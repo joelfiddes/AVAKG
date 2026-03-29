@@ -2078,7 +2078,7 @@ function pollPipelineStatus() {
             document.getElementById('pipeline-result-content').innerHTML = `
               <p style="color: var(--text-secondary); margin-bottom: 12px;">Pipeline completed successfully!</p>
               <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                <a href="${BASE}/api/results/file?path=${encodeURIComponent(projDir + '/dashboard.html')}" target="_blank" class="btn btn-primary">
+                <a href="${BASE}/api/results/file?path=${encodeURIComponent(projDir + '/Outputs/dashboard.html')}" target="_blank" class="btn btn-primary">
                   <i class="fas fa-map"></i> Open Dashboard
                 </a>
                 <a href="${BASE}/api/pipeline/results/download?dir=${encodeURIComponent(projDir)}" class="btn btn-outline">

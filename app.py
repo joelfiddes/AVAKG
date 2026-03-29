@@ -848,37 +848,40 @@ def api_pipeline_demo():
     import json as json_mod
 
     demo_project = os.path.join(DATA_DIR, "demo_kg_mining")
-
-    # Always start fresh for demo
-    if os.path.exists(demo_project):
-        shutil.rmtree(demo_project)
-
-    for d in ["Inputs/REL", "Outputs", "Work", ".pipeline"]:
-        os.makedirs(os.path.join(demo_project, d), exist_ok=True)
-
-    # Copy DEM as dem.tif (the only DEM avaframe should see)
-    shutil.copy2(
-        os.path.join(demo_dir, "Inputs", "demo_dem.tif"),
-        os.path.join(demo_project, "Inputs", "dem.tif"),
-    )
-
-    # Copy release shapefile
-    for ext in [".shp", ".shx", ".dbf", ".prj", ".cpg"]:
-        src = os.path.join(demo_dir, "Inputs", "REL", f"rel_demo{ext}")
-        if os.path.exists(src):
-            shutil.copy2(src, os.path.join(demo_project, "Inputs", "REL", f"rel_demo{ext}"))
-
     dem_path = os.path.join(demo_project, "Inputs", "dem.tif")
+    dashboard_path = os.path.join(demo_project, "Outputs", "dashboard.html")
 
-    # Pre-create checkpoints for steps 1-4 so pipeline skips to step 5
-    for step in range(1, 5):
-        cp = {"step": step, "timestamp": "", "cfg_hash": "demo", "result": {"demo": True}}
-        with open(os.path.join(demo_project, ".pipeline", f"step{step}.json"), "w") as f:
-            json_mod.dump(cp, f)
+    # Check if demo already has results — don't wipe
+    has_results = os.path.isfile(dashboard_path)
+
+    if not has_results:
+        # Fresh setup
+        if os.path.exists(demo_project):
+            shutil.rmtree(demo_project)
+
+        for d in ["Inputs/REL", "Outputs", "Work", ".pipeline"]:
+            os.makedirs(os.path.join(demo_project, d), exist_ok=True)
+
+        shutil.copy2(
+            os.path.join(demo_dir, "Inputs", "demo_dem.tif"),
+            os.path.join(demo_project, "Inputs", "dem.tif"),
+        )
+
+        for ext in [".shp", ".shx", ".dbf", ".prj", ".cpg"]:
+            src = os.path.join(demo_dir, "Inputs", "REL", f"rel_demo{ext}")
+            if os.path.exists(src):
+                shutil.copy2(src, os.path.join(demo_project, "Inputs", "REL", f"rel_demo{ext}"))
+
+        for step in range(1, 5):
+            cp = {"step": step, "timestamp": "", "cfg_hash": "demo", "result": {"demo": True}}
+            with open(os.path.join(demo_project, ".pipeline", f"step{step}.json"), "w") as f:
+                json_mod.dump(cp, f)
 
     return jsonify({
         "project_dir": demo_project,
         "dem_path": dem_path,
+        "has_results": has_results,
+        "dashboard_path": dashboard_path if has_results else None,
         "config": {
             "project": {"name": "demo_kg_mining", "dir": demo_project},
             "domain": {"from_dem": True},

@@ -1934,7 +1934,33 @@ function loadDemo() {
       document.getElementById('p-sim-res').value = cfg.simulation.res_type;
       document.getElementById('p-dash-title').value = cfg.dashboard.title;
       document.getElementById('p-dash-ds').value = cfg.dashboard.downsample;
-      toast('Demo loaded — KG Mining Site (5x5 km, 1 release area)', 'success');
+
+      // Show existing results if available
+      if (data.has_results) {
+        const projDir = cfg.project.dir;
+        document.getElementById('pipeline-progress').style.display = 'block';
+        document.getElementById('pipeline-status-badge').className = 'badge badge-complete';
+        document.getElementById('pipeline-status-badge').innerHTML = '<i class="fas fa-check"></i> Complete';
+        for (let i = 1; i <= 6; i++) document.getElementById('pstep-' + i).className = 'pipeline-step-card done';
+        document.getElementById('pipeline-log').innerHTML = '<div class="log-line-info">Previous run completed. Results available.</div>';
+        document.getElementById('pipeline-result').style.display = 'block';
+        document.getElementById('pipeline-result-content').innerHTML = `
+          <p style="color: var(--text-secondary); margin-bottom: 12px;">Results from previous run:</p>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <a href="${BASE}/api/results/file?path=${encodeURIComponent(projDir + '/Outputs/dashboard.html')}" target="_blank" class="btn btn-primary">
+              <i class="fas fa-map"></i> Open Dashboard
+            </a>
+            <a href="${BASE}/api/pipeline/results/download?dir=${encodeURIComponent(projDir)}" class="btn btn-outline">
+              <i class="fas fa-download"></i> Download Results (ZIP)
+            </a>
+            <button class="btn btn-outline" onclick="document.getElementById('pipeline-result').style.display='none'; document.getElementById('pipeline-progress').style.display='none';">
+              <i class="fas fa-redo"></i> Re-run
+            </button>
+          </div>`;
+        toast('Demo loaded — previous results available', 'success');
+      } else {
+        toast('Demo loaded — click Run Pipeline to simulate', 'success');
+      }
     })
     .catch(e => toast('Error loading demo: ' + e, 'error'));
 }

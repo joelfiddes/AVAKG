@@ -712,7 +712,45 @@ def api_results_file():
 # Pipeline routes
 # ---------------------------------------------------------------------------
 
-_pipeline_runs = {}
+# Pipeline run state persisted to disk (works with multiple gunicorn workers)
+_RUNS_DIR = os.path.join(DATA_DIR, ".runs")
+os.makedirs(_RUNS_DIR, exist_ok=True)
+
+
+def _run_state_path(run_id):
+    return os.path.join(_RUNS_DIR, f"{run_id}.json")
+
+
+def _read_run_state(run_id):
+    path = _run_state_path(run_id)
+    if not os.path.exists(path):
+        return None
+    with open(path) as f:
+        return json.load(f)
+
+
+def _write_run_state(run_id, state):
+    path = _run_state_path(run_id)
+    with open(path, "w") as f:
+        json.dump(state, f)
+
+
+def _append_run_log(run_id, line):
+    """Append a log line to the run's log file (one line per append)."""
+    log_path = os.path.join(_RUNS_DIR, f"{run_id}.log")
+    with open(log_path, "a") as f:
+        f.write(line + "\n")
+
+
+def _read_run_log(run_id, offset=0):
+    """Read log lines from offset."""
+    log_path = os.path.join(_RUNS_DIR, f"{run_id}.log")
+    if not os.path.exists(log_path):
+        return []
+    with open(log_path) as f:
+        lines = f.read().splitlines()
+    return lines[offset:]
+
 
 @app.route("/api/pipeline/template")
 def api_pipeline_template():
@@ -761,12 +799,11 @@ def api_pipeline_run():
         return jsonify({"error": "No config provided"}), 400
 
     run_id = str(uuid.uuid4())[:8]
-    _pipeline_runs[run_id] = {
+    _write_run_state(run_id, {
         "status": "running",
-        "log_lines": [],
         "started": datetime.now().isoformat(),
         "step": 0,
-    }
+    })
 
     # Write config to temp file
     config_path = os.path.join(tempfile.gettempdir(), f"avaframe_pipeline_{run_id}.yaml")
@@ -774,11 +811,7 @@ def api_pipeline_run():
         f.write(config_text)
 
     def run_in_thread():
-        def log_fn(msg):
-            _pipeline_runs[run_id]["log_lines"].append(str(msg))
-
         try:
-            # Run pipeline as subprocess so it gets its own process
             process = subprocess.Popen(
                 [sys.executable, "pipeline.py", config_path],
                 stdout=subprocess.PIPE,
@@ -789,21 +822,23 @@ def api_pipeline_run():
             )
 
             for line in process.stdout:
-                _pipeline_runs[run_id]["log_lines"].append(line.rstrip("\n"))
-                # Track current step
+                _append_run_log(run_id, line.rstrip("\n"))
                 if line.strip().startswith("[Step"):
                     try:
                         step_num = int(line.strip().split("/")[0].replace("[Step ", ""))
-                        _pipeline_runs[run_id]["step"] = step_num
+                        _write_run_state(run_id, {
+                            "status": "running",
+                            "step": step_num,
+                        })
                     except (ValueError, IndexError):
                         pass
 
             process.wait()
-            _pipeline_runs[run_id]["status"] = "complete" if process.returncode == 0 else "error"
-            _pipeline_runs[run_id]["returncode"] = process.returncode
+            status = "complete" if process.returncode == 0 else "error"
+            _write_run_state(run_id, {"status": status, "step": 6 if status == "complete" else 0})
         except Exception as e:
-            _pipeline_runs[run_id]["status"] = "error"
-            _pipeline_runs[run_id]["log_lines"].append(f"ERROR: {e}")
+            _write_run_state(run_id, {"status": "error"})
+            _append_run_log(run_id, f"ERROR: {e}")
         finally:
             try:
                 os.remove(config_path)
@@ -819,16 +854,19 @@ def api_pipeline_run():
 @app.route("/api/pipeline/status/<run_id>")
 def api_pipeline_status(run_id):
     """Get pipeline run status and logs."""
-    if run_id not in _pipeline_runs:
+    state = _read_run_state(run_id)
+    if state is None:
         return jsonify({"error": "Unknown run"}), 404
 
-    run = _pipeline_runs[run_id]
     offset = int(request.args.get("offset", 0))
+    log_lines = _read_run_log(run_id, offset)
+    total = offset + len(log_lines)
+
     return jsonify({
-        "status": run["status"],
-        "step": run.get("step", 0),
-        "log_lines": run["log_lines"][offset:],
-        "total_lines": len(run["log_lines"]),
+        "status": state.get("status", "unknown"),
+        "step": state.get("step", 0),
+        "log_lines": log_lines,
+        "total_lines": total,
     })
 
 

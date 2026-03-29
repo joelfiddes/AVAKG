@@ -969,7 +969,7 @@ def api_pipeline_results_download():
     if download_type == "all":
         allowed_exts = (".tif", ".asc", ".png", ".html", ".csv")
     else:
-        allowed_exts = (".tif",)
+        allowed_exts = (".tif", ".html")  # always include dashboard
 
     # Create zip in memory
     zip_path = os.path.join(project_dir, ".pipeline", "results.zip")

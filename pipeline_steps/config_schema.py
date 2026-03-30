@@ -39,7 +39,11 @@ DEFAULT_CONFIG = {
     "release": {
         "slope_min_deg": 28,
         "slope_max_deg": 60,
+        "curvature_max": 6.0,
+        "ruggedness_max": 0.06,
+        "ruggedness_window": 3,
         "min_area_m2": 2500,
+        "min_elevation_m": 0,
         "simplify_tolerance_m": 5,
         "erode_cells": 3,
     },
@@ -405,11 +409,15 @@ snow:
 
   return_periods: [30, 100, 300]
 
-# Release area generation
+# Release area generation (Bühler et al. 2022 methodology)
 release:
   slope_min_deg: 28              # Minimum slope for release areas
   slope_max_deg: 60              # Maximum slope for release areas
-  min_area_m2: 2500              # Minimum release area size
+  curvature_max: 6.0             # Max plan curvature — excludes ridges/gullies (rad/100hm)
+  ruggedness_max: 0.06           # Max VRM (0-1) — excludes rocky terrain
+  ruggedness_window: 3           # VRM focal window (cells), 3×3 at 5m = 15m
+  min_area_m2: 2500              # Minimum release area size (m²)
+  min_elevation_m: 0             # Min mean polygon elevation (0 = disabled)
   simplify_tolerance_m: 5        # Polygon simplification tolerance
   erode_cells: 3                 # Raster erosion (cells) before polygonising
 

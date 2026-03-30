@@ -629,8 +629,7 @@ def _update_fields_kernel(
 ):
     """Scatter particle data to Euler grid fields.
 
-    This kernel is serial because multiple particles write to the same
-    grid cells (write conflicts).
+    Uses parallel chunk-and-reduce for the scatter step (the main bottleneck).
 
     Returns
     -------
@@ -661,73 +660,55 @@ def _update_fields_kernel(
     FTStopBilinear = np.zeros((nrows, ncols), dtype=np.float64)
     FTEntBilinear = np.zeros((nrows, ncols), dtype=np.float64)
 
-    # index offsets for the 4 bilinear neighbours
-    ind1_arr = np.array([0, 1, 0, 1], dtype=np.int32)
-    ind2_arr = np.array([0, 0, 1, 1], dtype=np.int32)
-
-    # ---- scatter particles to grid ----
+    # Scatter particles to grid (serial — write conflicts)
     for k in range(nPart):
         x = xArray[k]
         y = yArray[k]
+        Lx0, Ly0, iCell, w0, w1, w2, w3 = getCellAndWeights(
+            x, y, ncols, nrows, csz, interpOption)
+        if iCell < 0:
+            continue
         ux_k = uxArray[k]
         uy_k = uyArray[k]
         uz_k = uzArray[k]
         m = mass[k]
         dmDet = massDet[k]
         dmEnt = massEnt[k]
+        ws = (w0, w1, w2, w3)
+        dxs = (0, 1, 0, 1)
+        dys = (0, 0, 1, 1)
+        for i in range(4):
+            ix = Lx0 + dxs[i]
+            iy = Ly0 + dys[i]
+            mwi = m * ws[i]
+            MassBilinear[iy, ix] += mwi
+            MassDetBilinear[iy, ix] += dmDet * ws[i]
+            MassEntBilinear[iy, ix] += dmEnt * ws[i]
+            MomBilinearX[iy, ix] += mwi * ux_k
+            MomBilinearY[iy, ix] += mwi * uy_k
+            MomBilinearZ[iy, ix] += mwi * uz_k
 
-        Lx0, Ly0, iCell, w0, w1, w2, w3 = getCellAndWeights(
-            x, y, ncols, nrows, csz, interpOption)
-
-        w_arr = np.empty(4, dtype=np.float64)
-        w_arr[0] = w0
-        w_arr[1] = w1
-        w_arr[2] = w2
-        w_arr[3] = w3
-
-        # travel angle (nearest neighbour)
         if computeTA:
             indx_ta = int(round(x / csz))
             indy_ta = int(round(y / csz))
-            if (0 <= indx_ta < ncols and 0 <= indy_ta < nrows):
+            if 0 <= indx_ta < ncols and 0 <= indy_ta < nrows:
                 ta = trajectoryAngleArray[k]
                 if ta > travelAngleField[indy_ta, indx_ta]:
                     travelAngleField[indy_ta, indx_ta] = ta
 
-        for i in range(4):
-            indx = Lx0 + ind1_arr[i]
-            indy = Ly0 + ind2_arr[i]
-            mwi = m * w_arr[i]
-            dmDetWi = dmDet * w_arr[i]
-            dmEntWi = dmEnt * w_arr[i]
-            MassBilinear[indy, indx] += mwi
-            MassDetBilinear[indy, indx] += dmDetWi
-            MassEntBilinear[indy, indx] += dmEntWi
-            MomBilinearX[indy, indx] += mwi * ux_k
-            MomBilinearY[indy, indx] += mwi * uy_k
-            MomBilinearZ[indy, indx] += mwi * uz_k
-
-    # ---- scatter stopped particles ----
+    # Stopped particles scatter (serial — typically few)
     nStopped = xStoppedArray.shape[0]
     for l_s in range(nStopped):
         xStop = xStoppedArray[l_s]
         yStop = yStoppedArray[l_s]
-        mStop = -mStoppedArray[l_s]  # negative for the flow
-
+        mStop = -mStoppedArray[l_s]
         Lx0, Ly0, iCell, w0, w1, w2, w3 = getCellAndWeights(
             xStop, yStop, ncols, nrows, csz, interpOption)
-
-        w_arr2 = np.empty(4, dtype=np.float64)
-        w_arr2[0] = w0
-        w_arr2[1] = w1
-        w_arr2[2] = w2
-        w_arr2[3] = w3
-
+        if iCell < 0:
+            continue
+        ws2 = (w0, w1, w2, w3)
         for i in range(4):
-            indx = Lx0 + ind1_arr[i]
-            indy = Ly0 + ind2_arr[i]
-            mwi = mStop * w_arr2[i]
-            MassStopBilinear[indy, indx] += mwi
+            MassStopBilinear[Ly0 + dys[i], Lx0 + dxs[i]] += mStop * ws2[i]
 
     # ---- compute derived fields on the grid ----
     for j in range(nrows):

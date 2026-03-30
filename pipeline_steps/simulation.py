@@ -1,6 +1,9 @@
-"""Run AvaFrame com1DFA simulations.
+"""Run AvaFrame simulations (com1DFA or com4FlowPy).
 
-Supports two modes:
+com1DFA: SPH particle simulation — detailed, slow, needs release thickness.
+com4FlowPy: Energy-line propagation — fast, large-area screening.
+
+Supports two modes for com1DFA:
 - Single-run (snow.source == "fixed"): one simulation with thickness from shapefile
 - Multi-run (snow.source in ["era5", "manual"]): one simulation per return period,
   each with a specific fracture depth, plus an envelope of all runs.
@@ -105,6 +108,125 @@ def _count_sims(output_dir: Path) -> int:
 
 
 # ---------------------------------------------------------------------------
+# com4FlowPy support
+# ---------------------------------------------------------------------------
+
+_FLOWPY_INI = """\
+[GENERAL]
+alpha = {alpha}
+exp = {exp}
+flux_threshold = {flux_threshold}
+max_z = {max_z}
+infra = False
+previewMode = False
+forest = False
+forestModule = forestFriction
+forestInteraction = False
+variableUmaxLim = False
+variableAlpha = False
+variableExponent = False
+fluxDistOldVersion = False
+tileSize = 15000
+tileOverlap = 5000
+procPerCPUCore = 1
+chunkSize = 50
+maxChunks = 500
+
+[PATHS]
+outputFileFormat = .tif
+outputFiles = zDelta|cellCounts|travelLengthMax|fpTravelAngleMax
+useCustomPaths = False
+useCustomPathDEM = False
+deleteTempFolder = False
+
+[FLAGS]
+plotPath = False
+plotProfile = False
+saveProfile = False
+writeRes = True
+fullOut = False
+"""
+
+
+def _create_release_raster(project_dir: str, log_fn=print) -> Path:
+    """Create a release raster from shapefiles in Inputs/REL/.
+
+    FlowPy needs a raster where cell value > 0 marks release cells.
+    We rasterize all release shapefiles onto the DEM grid.
+    """
+    import numpy as np
+    import rasterio
+    from rasterio.features import rasterize
+    import fiona
+    from shapely.geometry import shape
+
+    inputs = Path(project_dir) / "Inputs"
+    dem_files = list(inputs.glob("*.tif"))
+    if not dem_files:
+        raise FileNotFoundError("No DEM found in Inputs/")
+
+    with rasterio.open(dem_files[0]) as src:
+        dem_shape = (src.height, src.width)
+        dem_transform = src.transform
+        dem_crs = src.crs
+        dem_profile = src.profile.copy()
+
+    # Collect all release geometries
+    rel_dir = inputs / "REL"
+    geometries = []
+    for shp in sorted(rel_dir.glob("*.shp")):
+        with fiona.open(shp) as f:
+            for feat in f:
+                geom = shape(feat["geometry"])
+                if geom.is_valid and not geom.is_empty:
+                    geometries.append((geom, 1))
+
+    if not geometries:
+        raise ValueError("No valid release geometries found in Inputs/REL/")
+
+    log_fn(f"[flowpy] Rasterizing {len(geometries)} release polygons")
+
+    release = rasterize(
+        geometries,
+        out_shape=dem_shape,
+        transform=dem_transform,
+        fill=0,
+        dtype=np.uint8,
+    )
+
+    rel_raster = rel_dir / "release.tif"
+    profile = dem_profile.copy()
+    profile.update(dtype="uint8", count=1, nodata=0)
+    with rasterio.open(rel_raster, "w", **profile) as dst:
+        dst.write(release, 1)
+
+    n_cells = int(np.sum(release > 0))
+    log_fn(f"[flowpy] Release raster: {n_cells} cells, saved to {rel_raster.name}")
+    return rel_raster
+
+
+def _run_flowpy(project_dir: str, cfg: dict, log_fn=print):
+    """Run com4FlowPy using the standard avaframe runner."""
+    from avaframe.runCom4FlowPy import main as flowpy_main
+
+    sim = cfg.get("simulation", {})
+
+    # Write local config
+    content = _FLOWPY_INI.format(
+        alpha=sim.get("flowpy_alpha", 25),
+        exp=sim.get("flowpy_exp", 8),
+        flux_threshold=sim.get("flowpy_flux_threshold", 3.0e-4),
+        max_z=sim.get("flowpy_max_z", 8848),
+    )
+    ini_path = Path(project_dir) / "local_com4FlowPyCfg.ini"
+    ini_path.write_text(content)
+
+    log_fn("[flowpy] Running com4FlowPy...")
+    flowpy_main(avalancheDir=str(project_dir))
+    log_fn("[flowpy] com4FlowPy complete")
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -133,6 +255,12 @@ def run_simulations(cfg: dict, thicknesses: dict, project_dir: str,
         "output_dir": str, "n_sims": int}, ...]}``
     """
     project_dir = str(Path(project_dir).resolve())
+    model = cfg.get("simulation", {}).get("model", "com1DFA")
+
+    if model == "com4FlowPy":
+        return _run_flowpy_pipeline(cfg, project_dir, log_fn)
+
+    # --- com1DFA path ---
 
     # AvaFrame requires exactly one DEM in Inputs/ — remove extras
     inputs_dir = Path(project_dir) / "Inputs"
@@ -225,3 +353,55 @@ def run_simulations(cfg: dict, thicknesses: dict, project_dir: str,
 
     log_fn(f"[sim] All simulations complete: {len(runs)} run(s)")
     return {"runs": runs}
+
+
+def _run_flowpy_pipeline(cfg, project_dir, log_fn):
+    """Run com4FlowPy (fast energy-line model)."""
+    import glob
+
+    # Create release raster from shapefiles
+    _create_release_raster(project_dir, log_fn)
+
+    # Clean previous FlowPy outputs
+    for d in ["Outputs/com4FlowPy", "Work/com4FlowPy"]:
+        p = Path(project_dir) / d
+        if p.exists():
+            shutil.rmtree(p)
+
+    # AvaFrame requires exactly one DEM
+    inputs_dir = Path(project_dir) / "Inputs"
+    dem_files = sorted(inputs_dir.glob("*.tif"))
+    # Don't count the release raster as a DEM
+    dem_files = [f for f in dem_files if f.name != "release.tif" and "REL" not in str(f)]
+    if len(dem_files) > 1:
+        keep = [f for f in dem_files if f.name == "dem.tif"]
+        if not keep:
+            keep = [dem_files[0]]
+        for f in dem_files:
+            if f not in keep:
+                log_fn(f"[flowpy] Removing extra DEM: {f.name}")
+                f.unlink()
+
+    _run_flowpy(project_dir, cfg, log_fn)
+
+    # Find output directory
+    out_base = Path(project_dir) / "Outputs" / "com4FlowPy"
+    peak_dirs = sorted(out_base.glob("peakFiles/res_*"))
+    if peak_dirs:
+        out_dir = peak_dirs[0]
+        n_files = len(list(out_dir.glob("*.tif")))
+        log_fn(f"[flowpy] Results: {n_files} output rasters in {out_dir.name}")
+    else:
+        out_dir = out_base
+        n_files = len(list(out_base.rglob("*.tif")))
+
+    return {
+        "runs": [{
+            "label": "flowpy",
+            "thickness_m": 0,
+            "output_dir": str(out_dir),
+            "n_sims": 1,
+            "model": "com4FlowPy",
+        }],
+        "model": "com4FlowPy",
+    }

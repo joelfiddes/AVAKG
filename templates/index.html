@@ -721,9 +721,33 @@
           <!-- Simulation -->
           <div class="card">
             <div class="config-section-header collapse-toggle open" onclick="toggleSection(this)">
-              <i class="fas fa-chevron-right arrow"></i> com1DFA Simulation
+              <i class="fas fa-chevron-right arrow"></i> Simulation Model
             </div>
             <div class="section-body">
+              <div class="config-param">
+                <div><div class="config-key">model</div><div class="config-doc">Simulation model to use</div></div>
+                <div>
+                  <select class="param-input" id="p-sim-model" onchange="toggleSimModel()" data-path="simulation.model">
+                    <option value="com4FlowPy" selected>com4FlowPy (fast, large-area screening)</option>
+                    <option value="com1DFA">com1DFA (detailed SPH particle simulation)</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- FlowPy params -->
+              <div id="sim-flowpy-fields">
+                <div class="config-param">
+                  <div><div class="config-key">alpha</div><div class="config-doc">Angle of reach [deg]. Lower = longer runout. Typical: 20-30 for avalanches</div></div>
+                  <div><input type="number" step="1" class="param-input" id="p-sim-alpha" value="25" data-path="simulation.flowpy_alpha"></div>
+                </div>
+                <div class="config-param">
+                  <div><div class="config-key">exp</div><div class="config-doc">Spreading exponent. Higher = less lateral spreading</div></div>
+                  <div><input type="number" step="1" class="param-input" id="p-sim-exp" value="8" data-path="simulation.flowpy_exp"></div>
+                </div>
+              </div>
+
+              <!-- com1DFA params -->
+              <div id="sim-com1dfa-fields" style="display:none;">
               <div class="config-param">
                 <div><div class="config-key">friction_model</div><div class="config-doc">Friction model for dense flow simulation</div></div>
                 <div>
@@ -787,6 +811,7 @@
                   </select>
                 </div>
               </div>
+              </div><!-- end sim-com1dfa-fields -->
             </div>
           </div>
 
@@ -1697,6 +1722,12 @@ function toggleSnowSource() {
   document.getElementById('snow-era5-fields').style.display = src === 'era5' ? 'block' : 'none';
 }
 
+function toggleSimModel() {
+  const model = document.getElementById('p-sim-model').value;
+  document.getElementById('sim-flowpy-fields').style.display = model === 'com4FlowPy' ? 'block' : 'none';
+  document.getElementById('sim-com1dfa-fields').style.display = model === 'com1DFA' ? 'block' : 'none';
+}
+
 function buildConfigFromForm() {
   const cfg = {
     project: {
@@ -1717,12 +1748,15 @@ function buildConfigFromForm() {
       erode_cells: parseInt(document.getElementById('p-rel-erode').value) || 3,
     },
     simulation: {
+      model: document.getElementById('p-sim-model').value,
       friction_model: document.getElementById('p-sim-friction').value,
       mesh_cell_size_m: parseInt(document.getElementById('p-sim-mesh').value) || 15,
       t_end_s: parseInt(document.getElementById('p-sim-tend').value) || 400,
       delta_th_m: parseFloat(document.getElementById('p-sim-deltath').value) || 0.25,
       snow_density: parseInt(document.getElementById('p-sim-rho').value) || 200,
       res_type: document.getElementById('p-sim-res').value,
+      flowpy_alpha: parseFloat(document.getElementById('p-sim-alpha').value) || 25,
+      flowpy_exp: parseInt(document.getElementById('p-sim-exp').value) || 8,
     },
     dashboard: {
       generate: document.getElementById('p-dash-gen').value === 'true',

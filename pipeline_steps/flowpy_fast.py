@@ -317,8 +317,15 @@ def run_fast_flowpy_pipeline(cfg, project_dir, log_fn=print):
     out_dir = project_dir / "Outputs" / "com4FlowPy" / "peakFiles" / "res_fast"
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    # Map to avaframe-compatible filenames
+    name_map = {
+        "zdelta": "fast_zdelta",
+        "cellcounts": "fast_cellCounts",
+        "travellength": "fast_travelLengthMax",
+        "travelangle": "fast_fpTravelAngleMax",
+    }
     for name, data in results.items():
-        out_path = out_dir / f"fast_{name}.tif"
+        out_path = out_dir / f"{name_map.get(name, 'fast_' + name)}.tif"
         p = profile.copy()
         p.update(dtype="float64", count=1, nodata=0)
         with rasterio.open(out_path, "w", **p) as dst:

@@ -376,33 +376,7 @@ body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background
 
     {rp_selector_html}
 
-    <div class="sidebar-section">
-        <h3>Overlays</h3>
-        <div class="layer-option">
-            <input type="checkbox" id="cb-hillshade" checked>
-            <label for="cb-hillshade">Hillshade</label>
-        </div>
-        <div class="layer-option">
-            <input type="checkbox" id="cb-hazard" checked>
-            <label for="cb-hazard">Hazard zones</label>
-        </div>
-        <div class="layer-option">
-            <input type="checkbox" id="cb-pressure">
-            <label for="cb-pressure">Peak pressure</label>
-        </div>
-        <div class="layer-option">
-            <input type="checkbox" id="cb-thickness">
-            <label for="cb-thickness">Peak flow thickness</label>
-        </div>
-        <div class="layer-option">
-            <input type="checkbox" id="cb-velocity">
-            <label for="cb-velocity">Peak velocity</label>
-        </div>
-        <div class="layer-option">
-            <input type="checkbox" id="cb-release" checked>
-            <label for="cb-release">Release zones</label>
-        </div>
-    </div>
+    {overlays_sidebar_html}
 
     {kml_layers_sidebar}
 
@@ -415,41 +389,7 @@ body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background
         </div>
     </div>
 
-    <div class="sidebar-section">
-        <h3>Legend</h3>
-
-        <div class="legend-block" id="legend-hazard">
-            <div style="font-size:12px; font-weight:600; margin-bottom:4px;">Hazard Zones</div>
-            <div class="legend-row"><span class="legend-swatch" style="background:rgba(220,40,40,0.8)"></span> Red zone (&gt; 30 kPa)</div>
-            <div class="legend-row"><span class="legend-swatch" style="background:rgba(50,100,200,0.7)"></span> Blue zone (3 &ndash; 30 kPa)</div>
-            <div class="legend-row"><span class="legend-swatch" style="background:rgba(240,200,40,0.6)"></span> Yellow zone (1 &ndash; 3 kPa)</div>
-        </div>
-
-        <div class="legend-block" id="legend-pressure" style="display:none;">
-            <div style="font-size:12px; font-weight:600; margin-bottom:4px;">Peak Pressure (kPa)</div>
-            <div style="height:14px; border-radius:2px; background:linear-gradient(90deg,#ffffcc,#fd8d3c,#bd0026); border:1px solid rgba(255,255,255,0.2);"></div>
-            <div style="display:flex; justify-content:space-between; font-size:11px; color:#888;"><span>0</span><span>50</span><span>100</span></div>
-        </div>
-
-        <div class="legend-block" id="legend-thickness" style="display:none;">
-            <div style="font-size:12px; font-weight:600; margin-bottom:4px;">Peak Flow Thickness (m)</div>
-            <div style="height:14px; border-radius:2px; background:linear-gradient(90deg,#f7fbff,#6baed6,#08306b); border:1px solid rgba(255,255,255,0.2);"></div>
-            <div style="display:flex; justify-content:space-between; font-size:11px; color:#888;"><span>0</span><span>2.5</span><span>5</span></div>
-        </div>
-
-        <div class="legend-block" id="legend-velocity" style="display:none;">
-            <div style="font-size:12px; font-weight:600; margin-bottom:4px;">Peak Velocity (m/s)</div>
-            <div style="height:14px; border-radius:2px; background:linear-gradient(90deg,#0d0887,#9c179e,#ed7953,#f0f921); border:1px solid rgba(255,255,255,0.2);"></div>
-            <div style="display:flex; justify-content:space-between; font-size:11px; color:#888;"><span>0</span><span>30</span><span>60</span></div>
-        </div>
-
-        <div class="legend-block">
-            <div style="font-size:12px; font-weight:600; margin-bottom:4px;">Release Zones</div>
-            <div class="legend-row"><span class="legend-swatch" style="background:#e74c3c"></span> Large (&gt; 50 000 m&sup2;)</div>
-            <div class="legend-row"><span class="legend-swatch" style="background:#e67e22"></span> Medium (&gt; 10 000 m&sup2;)</div>
-            <div class="legend-row"><span class="legend-swatch" style="background:#f1c40f"></span> Small (&le; 10 000 m&sup2;)</div>
-        </div>
-    </div>
+    {legend_html}
 </div>
 
 <button id="sidebar-toggle" onclick="toggleSidebar()">&#9776;</button>
@@ -845,37 +785,90 @@ def generate_dashboard(cfg: dict, sim_results: dict, project_dir: str,
     overlay_data = {}
     run_labels = []
 
+    is_flowpy = sim_results.get("model") == "com4FlowPy"
+
     for run in runs:
         label = run["label"]
         out_dir = Path(run["output_dir"])
-        peak_dir = out_dir / "peakFiles"
         run_labels.append(label)
 
-        log_fn(f"[dashboard] Processing run '{label}' ...")
+        log_fn(f"[dashboard] Processing run '{label}' (model: {'FlowPy' if is_flowpy else 'com1DFA'}) ...")
 
         run_overlays = {"hillshade": hillshade_uri}
 
-        # Peak pressure (ppr) -> hazard zones
-        ppr_data, _, _, _ = _load_peak_envelope(str(peak_dir), "*_ppr.tif")
-        if ppr_data is not None:
-            hazard_img = _render_hazard_png(ppr_data, downsample)
-            run_overlays["hazard"] = _image_to_data_uri(hazard_img)
+        if is_flowpy:
+            # --- com4FlowPy results ---
+            # FlowPy outputs are directly in the result dir (not peakFiles/)
+            # Try both the res_* dir and its parent
+            search_dirs = [out_dir] + list(out_dir.glob("res_*"))
+            tif_dir = out_dir
+            for sd in search_dirs:
+                if list(sd.glob("*_zdelta.tif")) or list(sd.glob("*_zDelta.tif")):
+                    tif_dir = sd
+                    break
 
-            pressure_img = _render_colormap_png(
-                ppr_data / 1000.0, "YlOrRd", 0, 100, downsample)
-            run_overlays["pressure"] = _image_to_data_uri(pressure_img)
+            # zDelta (energy line height) -> runout extent
+            zdelta, _, _, _ = _load_peak_envelope(str(tif_dir), "*_zdelta.tif")
+            if zdelta is None:
+                zdelta, _, _, _ = _load_peak_envelope(str(tif_dir), "*_zDelta.tif")
+            if zdelta is not None:
+                zdelta[zdelta <= 0] = np.nan
+                vmax = float(np.nanpercentile(zdelta[zdelta > 0], 98)) if np.any(zdelta > 0) else 100
+                img = _render_colormap_png(zdelta, "YlOrRd", 0, vmax, downsample)
+                run_overlays["zdelta"] = _image_to_data_uri(img)
+                log_fn(f"[dashboard]   zDelta: max={np.nanmax(zdelta):.1f}m, vmax={vmax:.1f}m")
 
-        # Peak flow thickness (pft)
-        pft_data, _, _, _ = _load_peak_envelope(str(peak_dir), "*_pft.tif")
-        if pft_data is not None:
-            thickness_img = _render_colormap_png(pft_data, "Blues", 0, 5, downsample)
-            run_overlays["thickness"] = _image_to_data_uri(thickness_img)
+            # cellCounts -> path density
+            cells, _, _, _ = _load_peak_envelope(str(tif_dir), "*_cellCounts.tif")
+            if cells is not None:
+                cells[cells <= 0] = np.nan
+                vmax = float(np.nanpercentile(cells[cells > 0], 98)) if np.any(cells > 0) else 10
+                img = _render_colormap_png(cells, "hot_r", 0, vmax, downsample)
+                run_overlays["cellcounts"] = _image_to_data_uri(img)
+                log_fn(f"[dashboard]   cellCounts: max={np.nanmax(cells):.0f}")
 
-        # Peak velocity (pfv)
-        pfv_data, _, _, _ = _load_peak_envelope(str(peak_dir), "*_pfv.tif")
-        if pfv_data is not None:
-            velocity_img = _render_colormap_png(pfv_data, "plasma", 0, 60, downsample)
-            run_overlays["velocity"] = _image_to_data_uri(velocity_img)
+            # travelAngleMax -> travel angle
+            ta, _, _, _ = _load_peak_envelope(str(tif_dir), "*_fpTravelAngleMax.tif")
+            if ta is not None:
+                ta[ta <= 0] = np.nan
+                img = _render_colormap_png(ta, "RdYlGn", 15, 45, downsample)
+                run_overlays["travelangle"] = _image_to_data_uri(img)
+                log_fn(f"[dashboard]   travelAngle: range={np.nanmin(ta):.1f}-{np.nanmax(ta):.1f} deg")
+
+            # travelLengthMax
+            tl, _, _, _ = _load_peak_envelope(str(tif_dir), "*_travelLengthMax.tif")
+            if tl is not None:
+                tl[tl <= 0] = np.nan
+                vmax = float(np.nanpercentile(tl[tl > 0], 98)) if np.any(tl > 0) else 1000
+                img = _render_colormap_png(tl, "viridis", 0, vmax, downsample)
+                run_overlays["travellength"] = _image_to_data_uri(img)
+                log_fn(f"[dashboard]   travelLength: max={np.nanmax(tl):.0f}m")
+
+        else:
+            # --- com1DFA results ---
+            peak_dir = out_dir / "peakFiles"
+
+            # Peak pressure (ppr) -> hazard zones
+            ppr_data, _, _, _ = _load_peak_envelope(str(peak_dir), "*_ppr.tif")
+            if ppr_data is not None:
+                hazard_img = _render_hazard_png(ppr_data, downsample)
+                run_overlays["hazard"] = _image_to_data_uri(hazard_img)
+
+                pressure_img = _render_colormap_png(
+                    ppr_data / 1000.0, "YlOrRd", 0, 100, downsample)
+                run_overlays["pressure"] = _image_to_data_uri(pressure_img)
+
+            # Peak flow thickness (pft)
+            pft_data, _, _, _ = _load_peak_envelope(str(peak_dir), "*_pft.tif")
+            if pft_data is not None:
+                thickness_img = _render_colormap_png(pft_data, "Blues", 0, 5, downsample)
+                run_overlays["thickness"] = _image_to_data_uri(thickness_img)
+
+            # Peak velocity (pfv)
+            pfv_data, _, _, _ = _load_peak_envelope(str(peak_dir), "*_pfv.tif")
+            if pfv_data is not None:
+                velocity_img = _render_colormap_png(pfv_data, "plasma", 0, 60, downsample)
+                run_overlays["velocity"] = _image_to_data_uri(velocity_img)
 
         overlay_data[label] = run_overlays
 
@@ -930,9 +923,99 @@ def generate_dashboard(cfg: dict, sim_results: dict, project_dir: str,
     # ------------------------------------------------------------------
     dash_cfg = cfg.get("dashboard", {})
     title = dash_cfg.get("title") or cfg.get("project", {}).get("name", "AvaFrame Results")
-    subtitle = f"com1DFA simulation results"
-    if is_multi:
-        subtitle += f" | {len(run_labels)} return period(s)"
+    if is_flowpy:
+        subtitle = "com4FlowPy energy-line propagation"
+    else:
+        subtitle = "com1DFA dense-flow simulation"
+        if is_multi:
+            subtitle += f" | {len(run_labels)} return period(s)"
+
+    # ------------------------------------------------------------------
+    # 5b. Build model-specific sidebar and legend HTML
+    # ------------------------------------------------------------------
+    if is_flowpy:
+        overlays_sidebar_html = """
+    <div class="sidebar-section">
+        <h3>Overlays</h3>
+        <div class="layer-option"><input type="checkbox" id="cb-hillshade" checked><label for="cb-hillshade">Hillshade</label></div>
+        <div class="layer-option"><input type="checkbox" id="cb-zdelta" checked><label for="cb-zdelta">Energy Line Height (zDelta)</label></div>
+        <div class="layer-option"><input type="checkbox" id="cb-cellcounts"><label for="cb-cellcounts">Path Density</label></div>
+        <div class="layer-option"><input type="checkbox" id="cb-travelangle"><label for="cb-travelangle">Travel Angle</label></div>
+        <div class="layer-option"><input type="checkbox" id="cb-travellength"><label for="cb-travellength">Travel Length</label></div>
+        <div class="layer-option"><input type="checkbox" id="cb-release" checked><label for="cb-release">Release zones</label></div>
+    </div>"""
+        legend_html = """
+    <div class="sidebar-section">
+        <h3>Legend</h3>
+        <div class="legend-block" id="legend-zdelta">
+            <div style="font-size:12px; font-weight:600; margin-bottom:4px;">Energy Line Height (m)</div>
+            <div style="height:14px; border-radius:2px; background:linear-gradient(90deg,#ffffcc,#fd8d3c,#bd0026); border:1px solid rgba(255,255,255,0.2);"></div>
+            <div style="display:flex; justify-content:space-between; font-size:11px; color:#888;"><span>0</span><span>low</span><span>high</span></div>
+        </div>
+        <div class="legend-block" id="legend-cellcounts" style="display:none;">
+            <div style="font-size:12px; font-weight:600; margin-bottom:4px;">Path Density (cell count)</div>
+            <div style="height:14px; border-radius:2px; background:linear-gradient(90deg,#fff5f0,#fc4e2a,#67000d); border:1px solid rgba(255,255,255,0.2);"></div>
+            <div style="display:flex; justify-content:space-between; font-size:11px; color:#888;"><span>0</span><span>few</span><span>many</span></div>
+        </div>
+        <div class="legend-block" id="legend-travelangle" style="display:none;">
+            <div style="font-size:12px; font-weight:600; margin-bottom:4px;">Travel Angle (deg)</div>
+            <div style="height:14px; border-radius:2px; background:linear-gradient(90deg,#1a9850,#ffffbf,#d73027); border:1px solid rgba(255,255,255,0.2);"></div>
+            <div style="display:flex; justify-content:space-between; font-size:11px; color:#888;"><span>15</span><span>30</span><span>45</span></div>
+        </div>
+        <div class="legend-block" id="legend-travellength" style="display:none;">
+            <div style="font-size:12px; font-weight:600; margin-bottom:4px;">Travel Length (m)</div>
+            <div style="height:14px; border-radius:2px; background:linear-gradient(90deg,#440154,#31688e,#35b779,#fde725); border:1px solid rgba(255,255,255,0.2);"></div>
+            <div style="display:flex; justify-content:space-between; font-size:11px; color:#888;"><span>0</span><span>mid</span><span>max</span></div>
+        </div>
+        <div class="legend-block">
+            <div style="font-size:12px; font-weight:600; margin-bottom:4px;">Release Zones</div>
+            <div class="legend-row"><span class="legend-swatch" style="background:#e74c3c"></span> Large (&gt; 50k m&sup2;)</div>
+            <div class="legend-row"><span class="legend-swatch" style="background:#e67e22"></span> Medium (&gt; 10k m&sup2;)</div>
+            <div class="legend-row"><span class="legend-swatch" style="background:#f1c40f"></span> Small (&le; 10k m&sup2;)</div>
+        </div>
+    </div>"""
+    else:
+        overlays_sidebar_html = """
+    <div class="sidebar-section">
+        <h3>Overlays</h3>
+        <div class="layer-option"><input type="checkbox" id="cb-hillshade" checked><label for="cb-hillshade">Hillshade</label></div>
+        <div class="layer-option"><input type="checkbox" id="cb-hazard" checked><label for="cb-hazard">Hazard zones</label></div>
+        <div class="layer-option"><input type="checkbox" id="cb-pressure"><label for="cb-pressure">Peak pressure</label></div>
+        <div class="layer-option"><input type="checkbox" id="cb-thickness"><label for="cb-thickness">Peak flow thickness</label></div>
+        <div class="layer-option"><input type="checkbox" id="cb-velocity"><label for="cb-velocity">Peak velocity</label></div>
+        <div class="layer-option"><input type="checkbox" id="cb-release" checked><label for="cb-release">Release zones</label></div>
+    </div>"""
+        legend_html = """
+    <div class="sidebar-section">
+        <h3>Legend</h3>
+        <div class="legend-block" id="legend-hazard">
+            <div style="font-size:12px; font-weight:600; margin-bottom:4px;">Hazard Zones</div>
+            <div class="legend-row"><span class="legend-swatch" style="background:rgba(220,40,40,0.8)"></span> Red zone (&gt; 30 kPa)</div>
+            <div class="legend-row"><span class="legend-swatch" style="background:rgba(50,100,200,0.7)"></span> Blue zone (3 &ndash; 30 kPa)</div>
+            <div class="legend-row"><span class="legend-swatch" style="background:rgba(240,200,40,0.6)"></span> Yellow zone (1 &ndash; 3 kPa)</div>
+        </div>
+        <div class="legend-block" id="legend-pressure" style="display:none;">
+            <div style="font-size:12px; font-weight:600; margin-bottom:4px;">Peak Pressure (kPa)</div>
+            <div style="height:14px; border-radius:2px; background:linear-gradient(90deg,#ffffcc,#fd8d3c,#bd0026); border:1px solid rgba(255,255,255,0.2);"></div>
+            <div style="display:flex; justify-content:space-between; font-size:11px; color:#888;"><span>0</span><span>50</span><span>100</span></div>
+        </div>
+        <div class="legend-block" id="legend-thickness" style="display:none;">
+            <div style="font-size:12px; font-weight:600; margin-bottom:4px;">Peak Flow Thickness (m)</div>
+            <div style="height:14px; border-radius:2px; background:linear-gradient(90deg,#f7fbff,#6baed6,#08306b); border:1px solid rgba(255,255,255,0.2);"></div>
+            <div style="display:flex; justify-content:space-between; font-size:11px; color:#888;"><span>0</span><span>2.5</span><span>5</span></div>
+        </div>
+        <div class="legend-block" id="legend-velocity" style="display:none;">
+            <div style="font-size:12px; font-weight:600; margin-bottom:4px;">Peak Velocity (m/s)</div>
+            <div style="height:14px; border-radius:2px; background:linear-gradient(90deg,#0d0887,#9c179e,#ed7953,#f0f921); border:1px solid rgba(255,255,255,0.2);"></div>
+            <div style="display:flex; justify-content:space-between; font-size:11px; color:#888;"><span>0</span><span>30</span><span>60</span></div>
+        </div>
+        <div class="legend-block">
+            <div style="font-size:12px; font-weight:600; margin-bottom:4px;">Release Zones</div>
+            <div class="legend-row"><span class="legend-swatch" style="background:#e74c3c"></span> Large (&gt; 50k m&sup2;)</div>
+            <div class="legend-row"><span class="legend-swatch" style="background:#e67e22"></span> Medium (&gt; 10k m&sup2;)</div>
+            <div class="legend-row"><span class="legend-swatch" style="background:#f1c40f"></span> Small (&le; 10k m&sup2;)</div>
+        </div>
+    </div>"""
 
     # ------------------------------------------------------------------
     # 6. Render HTML
@@ -950,6 +1033,8 @@ def generate_dashboard(cfg: dict, sim_results: dict, project_dir: str,
         is_multi_run_js="true" if is_multi else "false",
         run_labels_js=json.dumps(run_labels),
         rp_selector_html=rp_html,
+        overlays_sidebar_html=overlays_sidebar_html,
+        legend_html=legend_html,
         kml_layers_sidebar=kml_layers_sidebar,
         kml_layers_js=kml_layers_js_data,
     )

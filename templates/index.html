@@ -1960,6 +1960,8 @@ function loadDemo() {
       document.getElementById('p-rel-area').value = cfg.release.min_area_m2;
       document.getElementById('p-rel-simp').value = cfg.release.simplify_tolerance_m;
       document.getElementById('p-rel-erode').value = cfg.release.erode_cells;
+      document.getElementById('p-sim-model').value = cfg.simulation.model || 'com4FlowPy';
+      toggleSimModel();
       document.getElementById('p-sim-friction').value = cfg.simulation.friction_model;
       document.getElementById('p-sim-mesh').value = cfg.simulation.mesh_cell_size_m;
       document.getElementById('p-sim-tend').value = cfg.simulation.t_end_s;

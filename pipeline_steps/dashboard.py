@@ -441,10 +441,16 @@ function createOverlays(runKey) {{
     var b = overlayBounds;
     var layers = {{}};
     if (d.hillshade) layers.hillshade = L.imageOverlay(d.hillshade, b);
+    // com1DFA overlays
     if (d.hazard) layers.hazard = L.imageOverlay(d.hazard, b);
     if (d.pressure) layers.pressure = L.imageOverlay(d.pressure, b);
     if (d.thickness) layers.thickness = L.imageOverlay(d.thickness, b);
     if (d.velocity) layers.velocity = L.imageOverlay(d.velocity, b);
+    // com4FlowPy overlays
+    if (d.zdelta) layers.zdelta = L.imageOverlay(d.zdelta, b);
+    if (d.cellcounts) layers.cellcounts = L.imageOverlay(d.cellcounts, b);
+    if (d.travelangle) layers.travelangle = L.imageOverlay(d.travelangle, b);
+    if (d.travellength) layers.travellength = L.imageOverlay(d.travellength, b);
     return layers;
 }}
 

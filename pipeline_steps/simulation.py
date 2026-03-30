@@ -258,6 +258,11 @@ def run_simulations(cfg: dict, thicknesses: dict, project_dir: str,
     model = cfg.get("simulation", {}).get("model", "com1DFA")
 
     if model == "com4FlowPy":
+        # Use fast implementation if available, fall back to avaframe
+        use_fast = cfg.get("simulation", {}).get("flowpy_fast", True)
+        if use_fast:
+            from pipeline_steps.flowpy_fast import run_fast_flowpy_pipeline
+            return run_fast_flowpy_pipeline(cfg, project_dir, log_fn)
         return _run_flowpy_pipeline(cfg, project_dir, log_fn)
 
     # --- com1DFA path ---

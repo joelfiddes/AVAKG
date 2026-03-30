@@ -36,6 +36,20 @@ Faithful port of avaframe `com4FlowPy` (flowClass.py + flowCore.py) to a single 
 - Outer loop in Python with progress logging
 - First call includes numba JIT compilation (~2s overhead)
 
+## TODO
+
+- [ ] Port forest interaction (friction/detrainment) to numba FlowPy
+- [ ] Port infrastructure back-tracking to numba FlowPy
+- [ ] Port variable alpha/exp/uMax per cell (spatially varying parameters from rasters)
+- [ ] Port preview mode (skip release cells already hit by prior paths)
+- [ ] Validate numba FlowPy on a larger domain with multiple release areas
+- [ ] Add com4FlowPy output support to dashboard download ZIP
+- [ ] Refine dashboard for FlowPy: better legends with actual value ranges
+- [ ] ERA5 snow climatology end-to-end test on server
+- [ ] Copernicus DEM auto-download test on server
+- [ ] KML upload end-to-end test
+- [ ] Multi-return-period (com1DFA) end-to-end test
+
 ## Deployment
 
 - **Live**: https://apps.mountainfutures.ch/avaframe/

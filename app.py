@@ -891,9 +891,13 @@ def api_pipeline_demo():
 
     # Check if demo already has results — don't wipe
     has_results = os.path.isfile(dashboard_path)
+    # Also preserve if simulation completed (even without dashboard)
+    flowpy_dir = os.path.join(demo_project, "Outputs", "com4FlowPy")
+    com1dfa_dir = os.path.join(demo_project, "Outputs", "com1DFA")
+    has_sim = os.path.isdir(flowpy_dir) or os.path.isdir(com1dfa_dir)
 
-    if not has_results:
-        # Fresh setup
+    if not has_results and not has_sim:
+        # Fresh setup — only wipe if no results at all
         if os.path.exists(demo_project):
             shutil.rmtree(demo_project)
 

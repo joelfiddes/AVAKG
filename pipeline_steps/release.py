@@ -184,10 +184,9 @@ def generate_release_areas(cfg, dem_path, project_dir, log_fn=print):
     # ------------------------------------------------------------------
     # Sectors 1-8: N=1, NE=2, E=3, SE=4, S=5, SW=6, W=7, NW=8
     aspect_deg = np.degrees(aspect_rad) % 360
-    aspect_sector = np.clip(
-        np.floor((aspect_deg + 22.5) % 360 / 45.0).astype(np.int32) + 1,
-        1, 8,
-    )
+    sector_float = np.floor((aspect_deg + 22.5) % 360 / 45.0)
+    sector_float = np.nan_to_num(sector_float, nan=0.0)
+    aspect_sector = np.clip(sector_float.astype(np.int32) + 1, 1, 8)
 
     # ------------------------------------------------------------------
     # 3. Valid mask (non-NaN DEM values)
@@ -463,20 +462,22 @@ def _vector_ruggedness_measure(slope_rad, aspect_rad, window_size):
         "Ruggedness ... calculated using 9-pixel window"
     """
     # Surface normal vector components
-    nx = np.sin(slope_rad) * np.sin(aspect_rad)
-    ny = np.sin(slope_rad) * np.cos(aspect_rad)
-    nz = np.cos(slope_rad)
+    valid = ~(np.isnan(slope_rad) | np.isnan(aspect_rad))
+    nx = np.where(valid, np.sin(slope_rad) * np.sin(aspect_rad), 0.0)
+    ny = np.where(valid, np.sin(slope_rad) * np.cos(aspect_rad), 0.0)
+    nz = np.where(valid, np.cos(slope_rad), 0.0)
 
-    # Focal sums
+    # Focal sums with valid-cell counting
     kernel = np.ones((window_size, window_size))
-    n_cells = window_size * window_size
-    sum_x = ndimage.convolve(np.nan_to_num(nx), kernel, mode='nearest')
-    sum_y = ndimage.convolve(np.nan_to_num(ny), kernel, mode='nearest')
-    sum_z = ndimage.convolve(np.nan_to_num(nz), kernel, mode='nearest')
+    sum_x = ndimage.convolve(nx, kernel, mode='nearest')
+    sum_y = ndimage.convolve(ny, kernel, mode='nearest')
+    sum_z = ndimage.convolve(nz, kernel, mode='nearest')
+    n_valid = ndimage.convolve(valid.astype(np.float64), kernel, mode='nearest')
+    n_valid = np.maximum(n_valid, 1.0)  # avoid division by zero
 
-    # Resultant vector length / n_cells
+    # Resultant vector length / valid cell count
     resultant = np.sqrt(sum_x**2 + sum_y**2 + sum_z**2)
-    vrm = 1.0 - (resultant / n_cells)
+    vrm = 1.0 - (resultant / n_valid)
     return np.clip(vrm, 0.0, 1.0)
 
 

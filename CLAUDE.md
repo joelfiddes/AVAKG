@@ -60,10 +60,33 @@ Expected speedup: 3-6x on Mac (8-10 cores), 2-3x on server (4 cores)
 
 ## TODO
 
-- [ ] Port `computeForceSPHC` to numba prange (36% of runtime)
-- [ ] Port `updateFieldsC` to numba prange (39% of runtime)
-- [ ] Port `computeForceC` for samosAT friction to numba (9%)
-- [ ] Port `updatePositionC` to numba (7%)
+- [x] Port `computeForceSPHC` to numba prange (36% → parallel, done)
+- [ ] ~~Port `updateFieldsC` to numba prange~~ (chunk-reduce too slow, needs full rewrite)
+- [x] Port `computeForceC` for samosAT friction to numba (9% → parallel, done)
+- [ ] ~~Port `updatePositionC` to numba~~ (7%, marginal gain)
+- [ ] **Full com1DFA rewrite in numba** — separate project, see architecture below
+
+### com1DFA Full Rewrite Architecture (planned)
+Goal: 5-10x over current Cython for large simulations (100k+ particles)
+
+Design:
+- Pre-allocated struct-of-arrays (no Python dicts in hot loop)
+- All config parameters baked into flat struct at init time
+- Single `@njit` time loop function — Python only for I/O
+- Grid update via cell-sorted particle scatter (avoids race conditions)
+- `prange` on all particle loops (force, SPH, position, fields)
+- Persistent buffers: zero-and-reuse instead of allocate-per-step
+
+Modules:
+1. `init.py` — DEM loading, particle initialization from release polygons
+2. `kernels.py` — njit force, SPH, position, fields kernels (all prange)
+3. `timeloop.py` — njit time integration loop
+4. `io.py` — peak field output, GeoTIFF writing
+5. `run.py` — CLI entry point, config loading
+
+Friction: samosAT only (covers 95% of use cases)
+SPH: option 1 (SamosAT style, dz=0)
+Interpolation: bilinear only
 - [ ] Port forest interaction (friction/detrainment) to numba FlowPy
 - [ ] Port infrastructure back-tracking to numba FlowPy
 - [ ] Port variable alpha/exp/uMax per cell (spatially varying parameters from rasters)

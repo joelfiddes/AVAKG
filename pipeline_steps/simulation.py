@@ -358,6 +358,24 @@ def run_simulations(cfg: dict, thicknesses: dict, project_dir: str,
 def _run_flowpy_pipeline(cfg, project_dir, log_fn):
     """Run com4FlowPy (fast energy-line model)."""
     import glob
+    import numpy as np
+    import rasterio
+
+    # Ensure DEM has nodata set (FlowPy requires it)
+    inputs_dir = Path(project_dir) / "Inputs"
+    for dem_f in sorted(inputs_dir.glob("*.tif")):
+        if dem_f.name == "release.tif" or "REL" in str(dem_f):
+            continue
+        with rasterio.open(dem_f) as src:
+            if src.nodata is None:
+                log_fn(f"[flowpy] Setting nodata=-9999 on {dem_f.name}")
+                data = src.read(1)
+                profile = src.profile.copy()
+                profile["nodata"] = -9999.0
+                data[np.isnan(data)] = -9999.0
+                with rasterio.open(dem_f, "w", **profile) as dst:
+                    dst.write(data, 1)
+        break
 
     # Create release raster from shapefiles
     _create_release_raster(project_dir, log_fn)

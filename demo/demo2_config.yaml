@@ -1,0 +1,35 @@
+# Demo 2 — Full domain, all PRAs, 25m resolution
+# All release areas auto-delineated from slope analysis
+# ~35k release cells, runs in ~1 minute with fast FlowPy
+project:
+  name: demo2_full_domain
+  dir: ""  # auto-set
+
+domain:
+  from_dem: true
+
+dem:
+  source: local
+  path: ""  # auto-set to demo DEM
+  target_res_m: 25
+
+snow:
+  source: fixed
+  thickness_m: 1.0
+
+release:
+  slope_min_deg: 28
+  slope_max_deg: 60
+  min_area_m2: 5000
+  simplify_tolerance_m: 15
+  erode_cells: 2
+
+simulation:
+  model: com4FlowPy
+  flowpy_alpha: 25
+  flowpy_exp: 8
+
+dashboard:
+  generate: true
+  title: "Demo 2 — Full Domain All PRAs (FlowPy)"
+  downsample: 1

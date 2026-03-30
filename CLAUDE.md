@@ -36,8 +36,34 @@ Faithful port of avaframe `com4FlowPy` (flowClass.py + flowCore.py) to a single 
 - Outer loop in Python with progress logging
 - First call includes numba JIT compilation (~2s overhead)
 
+## com1DFA Profiling (21k particles, 50m mesh, 1188 timesteps)
+
+| Function | Time | % | Description |
+|----------|------|---|-------------|
+| `computeForceSPHC` | 34.2s | 36% | SPH neighbor search + pressure gradient |
+| `updateFieldsC` | 36.8s | 39% | Particle-to-grid interpolation |
+| `computeForceC` | 8.1s | 9% | Gravity + friction per particle |
+| `updatePositionC` | 7.1s | 7% | Velocity + position update |
+| `getNeighborsC` | 3.8s | 4% | Grid cell assignment |
+| Python overhead | 5.1s | 5% | Dict access, config reads |
+
+**SPH + Fields = 75% of runtime.** Both are particle loops suitable for `numba.prange` parallelization.
+
+### Numba port strategy (com1DFA)
+1. Port `computeForceSPHC` to numba with `prange` — biggest win (36%)
+2. Port `updateFieldsC` to numba with `prange` — second biggest (39%)
+3. Port `computeForceC` (samosAT friction only) — 9%
+4. Port `updatePositionC` — 7%
+5. Bundle as drop-in replacement module
+
+Expected speedup: 3-6x on Mac (8-10 cores), 2-3x on server (4 cores)
+
 ## TODO
 
+- [ ] Port `computeForceSPHC` to numba prange (36% of runtime)
+- [ ] Port `updateFieldsC` to numba prange (39% of runtime)
+- [ ] Port `computeForceC` for samosAT friction to numba (9%)
+- [ ] Port `updatePositionC` to numba (7%)
 - [ ] Port forest interaction (friction/detrainment) to numba FlowPy
 - [ ] Port infrastructure back-tracking to numba FlowPy
 - [ ] Port variable alpha/exp/uMax per cell (spatially varying parameters from rasters)

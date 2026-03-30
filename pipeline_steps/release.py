@@ -4,6 +4,18 @@ Release area generation from slope analysis.
 Refactored from the Jyrgalan approach: load DEM, compute slope, classify
 potential release zones, vectorise connected components, write one shapefile
 per polygon to {project_dir}/Inputs/REL/.
+
+References
+----------
+Bühler, Y., von Rickenbach, D., Stoffel, A., Margreth, S., Stoffel, L.,
+    and Christen, M. (2018). Automated snow avalanche release area
+    delineation. NHESS, 18, 3235–3251.
+    https://doi.org/10.5194/nhess-18-3235-2018
+
+Sykes, J., Bühler, Y., Margreth, S., Stoffel, L., and Björk, S. (2022).
+    Automated snow avalanche release area delineation in data-sparse,
+    remote, and forested regions. NHESS, 22, 3247–3270.
+    https://doi.org/10.5194/nhess-22-3247-2022
 """
 
 import os
@@ -17,9 +29,16 @@ import numpy as np
 import rasterio
 import rasterio.features
 from matplotlib.colors import ListedColormap
+from rasterio.enums import Resampling
+from rasterio.warp import reproject
 from scipy import ndimage
 from shapely.geometry import mapping, shape
 from shapely.ops import unary_union
+
+# Target resolution for PRA analysis (Bühler et al. 2018 sweet spot)
+TARGET_CELLSIZE_M = 5.0
+# Apply 5x5 slope smoothing when cellsize <= this threshold
+SMOOTH_SLOPE_MAX_CELLSIZE_M = 10.0
 
 
 # ---------------------------------------------------------------------------
@@ -85,6 +104,15 @@ def generate_release_areas(cfg, dem_path, project_dir, log_fn=print):
     log_fn(f"[release] DEM shape: {dem.shape}, cellsize: {cellsize:.2f} m")
 
     # ------------------------------------------------------------------
+    # 1b. Upsample to TARGET_CELLSIZE_M if resolution is finer
+    # ------------------------------------------------------------------
+    if cellsize < TARGET_CELLSIZE_M:
+        dem, transform, cellsize_x, cellsize_y, nodata = _upsample_dem(
+            dem, transform, crs, nodata, TARGET_CELLSIZE_M, log_fn,
+        )
+        cellsize = (cellsize_x + cellsize_y) / 2.0
+
+    # ------------------------------------------------------------------
     # 2. Compute slope (degrees) via np.gradient
     # ------------------------------------------------------------------
     # Mask nodata
@@ -97,6 +125,21 @@ def generate_release_areas(cfg, dem_path, project_dir, log_fn=print):
     dy, dx = np.gradient(dem_filled, cellsize_y, cellsize_x)
     slope_rad = np.arctan(np.sqrt(dx**2 + dy**2))
     slope_deg = np.degrees(slope_rad)
+
+    # ------------------------------------------------------------------
+    # 2b. Smooth slope with 5x5 mean filter for high-res DEMs
+    #     (Bühler et al. 2018: distance-weighted 5x5 filter at ≤5 m)
+    # ------------------------------------------------------------------
+    if cellsize <= SMOOTH_SLOPE_MAX_CELLSIZE_M:
+        log_fn(f"[release] Applying 5×5 slope smoothing (cellsize {cellsize:.1f} m "
+               f"≤ {SMOOTH_SLOPE_MAX_CELLSIZE_M} m)")
+        kernel = np.ones((5, 5)) / 25.0
+        slope_deg = ndimage.convolve(
+            slope_deg, kernel, mode='nearest',
+        )
+    else:
+        log_fn(f"[release] Skipping slope smoothing (cellsize {cellsize:.1f} m "
+               f"> {SMOOTH_SLOPE_MAX_CELLSIZE_M} m)")
 
     # ------------------------------------------------------------------
     # 3. Valid mask (non-NaN DEM values)
@@ -271,6 +314,61 @@ def generate_release_areas(cfg, dem_path, project_dir, log_fn=print):
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+def _upsample_dem(dem, transform, crs, nodata, target_cellsize, log_fn):
+    """
+    Resample a DEM to a coarser target cell size using bilinear interpolation.
+
+    High-resolution DEMs (<5 m) contain microtopography (rocks, small cliffs)
+    that creates noisy slope values. Resampling to ~5 m matches the resolution
+    used by Bühler et al. (2018) for PRA delineation.
+
+    References
+    ----------
+    Bühler et al. (2018), NHESS 18, 3235–3251, §3.1:
+        "5 m resolution DEM ... 5×5 cell mean filter (distance-weighted)"
+    Sykes et al. (2022), NHESS 22, 3247–3270:
+        Uses 5 m DEM from SPOT 6/7 stereo for PRA analysis.
+    """
+    src_cellsize = (abs(transform.a) + abs(transform.e)) / 2.0
+    log_fn(f"[release] Upsampling DEM from {src_cellsize:.2f} m to "
+           f"{target_cellsize:.1f} m (bilinear)")
+
+    scale_x = abs(transform.a) / target_cellsize
+    scale_y = abs(transform.e) / target_cellsize
+    new_h = max(1, int(dem.shape[0] * scale_y))
+    new_w = max(1, int(dem.shape[1] * scale_x))
+
+    new_transform = rasterio.transform.from_bounds(
+        transform.c,
+        transform.f + transform.e * dem.shape[0],
+        transform.c + transform.a * dem.shape[1],
+        transform.f,
+        new_w, new_h,
+    )
+
+    if nodata is None:
+        nodata = -9999.0
+    dst = np.full((new_h, new_w), nodata, dtype=np.float64)
+    reproject(
+        source=dem,
+        destination=dst,
+        src_transform=transform,
+        src_crs=crs,
+        dst_transform=new_transform,
+        dst_crs=crs,
+        src_nodata=nodata,
+        dst_nodata=nodata,
+        resampling=Resampling.bilinear,
+    )
+
+    new_cellsize_x = abs(new_transform.a)
+    new_cellsize_y = abs(new_transform.e)
+    log_fn(f"[release] Upsampled DEM: {dst.shape} "
+           f"({new_cellsize_x:.2f}×{new_cellsize_y:.2f} m)")
+
+    return dst, new_transform, new_cellsize_x, new_cellsize_y, nodata
+
 
 def _remove_holes(polygon):
     """Return a polygon with all interior rings removed."""

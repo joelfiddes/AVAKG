@@ -480,7 +480,8 @@ function showOverlays() {{
     var opacity = parseInt(document.getElementById('opacity-slider').value) / 100;
 
     // Add checked layers
-    var order = ['hillshade', 'hazard', 'pressure', 'thickness', 'velocity'];
+    var order = ['hillshade', 'hazard', 'pressure', 'thickness', 'velocity',
+                 'zdelta', 'cellcounts', 'travelangle', 'travellength'];
     order.forEach(function(key) {{
         var cb = document.getElementById('cb-' + key);
         if (cb && cb.checked && layers[key]) {{
@@ -495,7 +496,8 @@ function showOverlays() {{
 }}
 
 // --- Layer toggle ---
-['hillshade','hazard','pressure','thickness','velocity','release'].forEach(function(key) {{
+['hillshade','hazard','pressure','thickness','velocity',
+ 'zdelta','cellcounts','travelangle','travellength','release'].forEach(function(key) {{
     var cb = document.getElementById('cb-' + key);
     if (cb) cb.addEventListener('change', function() {{
         showOverlays();

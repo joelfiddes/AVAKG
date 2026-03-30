@@ -604,50 +604,88 @@ def run_flowpy_fast(dem, release_mask, cellsize, alpha=25.0, exp=8.0,
 
 
 def run_fast_flowpy_pipeline(cfg, project_dir, log_fn=print):
-    """Pipeline integration - same interface as before.
-
-    Expects cfg to have keys: dem_path, release_path, cellsize, alpha, exp,
-    flux_threshold, max_z, nodata, output_dir.
-    """
+    """Run fast FlowPy from pipeline config. Same interface as simulation.py expects."""
     import rasterio
+    from rasterio.features import rasterize
+    import fiona
+    from shapely.geometry import shape
 
     project_dir = Path(project_dir)
-    dem_path = cfg.get('dem_path', project_dir / 'dem.tif')
-    release_path = cfg.get('release_path', project_dir / 'release.tif')
-    output_dir = Path(cfg.get('output_dir', project_dir / 'flowpy_output'))
-    output_dir.mkdir(parents=True, exist_ok=True)
+    sim = cfg.get("simulation", {})
 
-    alpha = float(cfg.get('alpha', 25.0))
-    exp = float(cfg.get('exp', 8.0))
-    flux_threshold = float(cfg.get('flux_threshold', 3e-4))
-    max_z = float(cfg.get('max_z', 8848.0))
+    # Find DEM in Inputs/
+    dem_files = list((project_dir / "Inputs").glob("*.tif"))
+    dem_files = [f for f in dem_files if f.name != "release.tif" and "REL" not in str(f)]
+    if not dem_files:
+        raise FileNotFoundError("No DEM found in Inputs/")
 
-    with rasterio.open(dem_path) as src:
+    log_fn("[flowpy-fast] Loading DEM...")
+    with rasterio.open(dem_files[0]) as src:
         dem = src.read(1).astype(np.float64)
+        cellsize = abs(src.transform.a)
         profile = src.profile.copy()
-        cellsize = abs(src.res[0])
+        transform = src.transform
         nodata = src.nodata if src.nodata is not None else -9999.0
 
-    with rasterio.open(release_path) as src:
-        release = src.read(1)
+    # Set nodata
+    dem[np.isnan(dem)] = nodata
+    if nodata != -9999.0:
+        dem[dem == nodata] = -9999.0
+        nodata = -9999.0
 
+    # Build release mask from shapefiles
+    rel_dir = project_dir / "Inputs" / "REL"
+    geometries = []
+    for shp in sorted(rel_dir.glob("*.shp")):
+        with fiona.open(shp) as f:
+            for feat in f:
+                geom = shape(feat["geometry"])
+                if geom.is_valid and not geom.is_empty:
+                    geometries.append((geom, 1))
+
+    if not geometries:
+        raise ValueError("No release geometries found in Inputs/REL/")
+
+    log_fn(f"[flowpy-fast] Rasterizing {len(geometries)} release polygons...")
+    release_mask = rasterize(
+        geometries, out_shape=dem.shape, transform=transform,
+        fill=0, dtype=np.uint8,
+    )
+
+    # Run
     results = run_flowpy_fast(
-        dem, release, cellsize,
-        alpha=alpha, exp=exp,
-        flux_threshold=flux_threshold,
-        max_z=max_z, nodata=nodata,
+        dem, release_mask, cellsize,
+        alpha=float(sim.get("flowpy_alpha", 25)),
+        exp=float(sim.get("flowpy_exp", 8)),
+        flux_threshold=float(sim.get("flowpy_flux_threshold", 3e-4)),
+        max_z=float(sim.get("flowpy_max_z", 8848)),
+        nodata=nodata,
         log_fn=log_fn,
     )
 
     # Write output rasters
-    profile.update(dtype='float32', count=1, compress='lzw')
-    for name, arr in results.items():
-        out_path = output_dir / f'{name}.tif'
-        with rasterio.open(out_path, 'w', **profile) as dst:
-            dst.write(arr.astype(np.float32), 1)
-        log_fn(f"  Wrote {out_path}")
+    out_dir = project_dir / "Outputs" / "com4FlowPy" / "peakFiles" / "res_fast"
+    out_dir.mkdir(parents=True, exist_ok=True)
 
-    return results
+    name_map = {
+        "zdelta": "fast_zdelta",
+        "cellcounts": "fast_cellCounts",
+        "travellength": "fast_travelLengthMax",
+        "travelangle": "fast_fpTravelAngleMax",
+    }
+    profile.update(dtype="float32", count=1, nodata=0, compress="lzw")
+    for name in ["zdelta", "cellcounts", "travellength", "travelangle"]:
+        if name in results:
+            out_path = out_dir / f"{name_map[name]}.tif"
+            with rasterio.open(out_path, "w", **profile) as dst:
+                dst.write(results[name].astype(np.float32), 1)
+            log_fn(f"[flowpy-fast] Wrote {out_path.name}")
+
+    return {
+        "runs": [{"label": "flowpy", "thickness_m": 0,
+                  "output_dir": str(out_dir), "n_sims": 1, "model": "com4FlowPy"}],
+        "model": "com4FlowPy",
+    }
 
 
 # ---------------------------------------------------------------------------

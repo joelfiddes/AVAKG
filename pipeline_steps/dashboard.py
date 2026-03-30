@@ -852,6 +852,30 @@ def generate_dashboard(cfg: dict, sim_results: dict, project_dir: str,
                 run_overlays["travellength"] = _image_to_data_uri(img)
                 log_fn(f"[dashboard]   travelLength: max={np.nanmax(tl):.0f}m")
 
+            # Estimated velocity
+            vel, _, _, _ = _load_peak_envelope(str(tif_dir), "*_velocity.tif")
+            if vel is not None:
+                vel[vel <= 0] = np.nan
+                vmax = float(np.nanpercentile(vel[vel > 0], 98)) if np.any(vel > 0) else 60
+                img = _render_colormap_png(vel, "plasma", 0, vmax, downsample)
+                run_overlays["velocity"] = _image_to_data_uri(img)
+                log_fn(f"[dashboard]   velocity: max={np.nanmax(vel):.1f} m/s")
+
+            # Estimated pressure
+            pres, _, _, _ = _load_peak_envelope(str(tif_dir), "*_pressure.tif")
+            if pres is not None:
+                pres[pres <= 0] = np.nan
+                img = _render_colormap_png(pres, "YlOrRd", 0, 100, downsample)
+                run_overlays["pressure"] = _image_to_data_uri(img)
+                log_fn(f"[dashboard]   pressure: max={np.nanmax(pres):.1f} kPa")
+
+            # Hazard zones from estimated pressure (kPa -> Pa for _render_hazard_png)
+            if pres is not None:
+                pres_pa = np.nan_to_num(pres, nan=0) * 1000.0  # kPa -> Pa
+                hazard_img = _render_hazard_png(pres_pa, downsample)
+                run_overlays["hazard"] = _image_to_data_uri(hazard_img)
+                log_fn(f"[dashboard]   hazard zones rendered")
+
         else:
             # --- com1DFA results ---
             peak_dir = out_dir / "peakFiles"
@@ -946,7 +970,10 @@ def generate_dashboard(cfg: dict, sim_results: dict, project_dir: str,
     <div class="sidebar-section">
         <h3>Overlays</h3>
         <div class="layer-option"><input type="checkbox" id="cb-hillshade" checked><label for="cb-hillshade">Hillshade</label></div>
-        <div class="layer-option"><input type="checkbox" id="cb-zdelta" checked><label for="cb-zdelta">Energy Line Height (zDelta)</label></div>
+        <div class="layer-option"><input type="checkbox" id="cb-hazard" checked><label for="cb-hazard">Hazard Zones (estimated)</label></div>
+        <div class="layer-option"><input type="checkbox" id="cb-pressure"><label for="cb-pressure">Est. Pressure (kPa)</label></div>
+        <div class="layer-option"><input type="checkbox" id="cb-velocity"><label for="cb-velocity">Est. Velocity (m/s)</label></div>
+        <div class="layer-option"><input type="checkbox" id="cb-zdelta"><label for="cb-zdelta">Energy Line Height</label></div>
         <div class="layer-option"><input type="checkbox" id="cb-cellcounts"><label for="cb-cellcounts">Path Density</label></div>
         <div class="layer-option"><input type="checkbox" id="cb-travelangle"><label for="cb-travelangle">Travel Angle</label></div>
         <div class="layer-option"><input type="checkbox" id="cb-travellength"><label for="cb-travellength">Travel Length</label></div>
@@ -955,13 +982,30 @@ def generate_dashboard(cfg: dict, sim_results: dict, project_dir: str,
         legend_html = """
     <div class="sidebar-section">
         <h3>Legend</h3>
-        <div class="legend-block" id="legend-zdelta">
+        <div class="legend-block" id="legend-hazard">
+            <div style="font-size:12px; font-weight:600; margin-bottom:4px;">Estimated Hazard Zones</div>
+            <div class="legend-row"><span class="legend-swatch" style="background:rgba(220,40,40,0.8)"></span> Red zone (&gt; 30 kPa)</div>
+            <div class="legend-row"><span class="legend-swatch" style="background:rgba(50,100,200,0.7)"></span> Blue zone (3 &ndash; 30 kPa)</div>
+            <div class="legend-row"><span class="legend-swatch" style="background:rgba(240,200,40,0.6)"></span> Yellow zone (1 &ndash; 3 kPa)</div>
+            <div style="font-size:10px; color:#888; margin-top:4px; font-style:italic;">Estimated from energy line: p = &rho;gz&Delta;</div>
+        </div>
+        <div class="legend-block" id="legend-pressure" style="display:none;">
+            <div style="font-size:12px; font-weight:600; margin-bottom:4px;">Est. Pressure (kPa)</div>
+            <div style="height:14px; border-radius:2px; background:linear-gradient(90deg,#ffffcc,#fd8d3c,#bd0026); border:1px solid rgba(255,255,255,0.2);"></div>
+            <div style="display:flex; justify-content:space-between; font-size:11px; color:#888;"><span>0</span><span>50</span><span>100</span></div>
+        </div>
+        <div class="legend-block" id="legend-velocity" style="display:none;">
+            <div style="font-size:12px; font-weight:600; margin-bottom:4px;">Est. Velocity (m/s)</div>
+            <div style="height:14px; border-radius:2px; background:linear-gradient(90deg,#0d0887,#9c179e,#ed7953,#f0f921); border:1px solid rgba(255,255,255,0.2);"></div>
+            <div style="display:flex; justify-content:space-between; font-size:11px; color:#888;"><span>0</span><span>30</span><span>60</span></div>
+        </div>
+        <div class="legend-block" id="legend-zdelta" style="display:none;">
             <div style="font-size:12px; font-weight:600; margin-bottom:4px;">Energy Line Height (m)</div>
             <div style="height:14px; border-radius:2px; background:linear-gradient(90deg,#ffffcc,#fd8d3c,#bd0026); border:1px solid rgba(255,255,255,0.2);"></div>
             <div style="display:flex; justify-content:space-between; font-size:11px; color:#888;"><span>0</span><span>low</span><span>high</span></div>
         </div>
         <div class="legend-block" id="legend-cellcounts" style="display:none;">
-            <div style="font-size:12px; font-weight:600; margin-bottom:4px;">Path Density (cell count)</div>
+            <div style="font-size:12px; font-weight:600; margin-bottom:4px;">Path Density</div>
             <div style="height:14px; border-radius:2px; background:linear-gradient(90deg,#fff5f0,#fc4e2a,#67000d); border:1px solid rgba(255,255,255,0.2);"></div>
             <div style="display:flex; justify-content:space-between; font-size:11px; color:#888;"><span>0</span><span>few</span><span>many</span></div>
         </div>

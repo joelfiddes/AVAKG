@@ -585,21 +585,38 @@ def run_flowpy_fast(dem, release_mask, cellsize, alpha=25.0, exp=8.0,
             out_fp_angle, out_sl_angle, out_trav_len
         )
 
+    # Estimate velocity and pressure from zDelta (energy line)
+    # v = sqrt(2 * g * zDelta), p = 0.5 * rho * v^2 = rho * g * zDelta
+    g = 9.81
+    rho = 300.0  # typical avalanche density (kg/m3) — higher than release snow
+    velocity = np.sqrt(2.0 * g * np.maximum(out_zdelta, 0))
+    pressure = rho * g * np.maximum(out_zdelta, 0) / 1000.0  # kPa
+
+    # Hazard zones (Swiss classification from estimated pressure)
+    # Red > 30 kPa, Blue 3-30 kPa, Yellow 1-3 kPa
+    hazard = np.zeros_like(out_zdelta, dtype=np.float32)
+    hazard[(pressure > 0) & (pressure < 1)] = 0.5    # below yellow
+    hazard[(pressure >= 1) & (pressure < 3)] = 1.0   # yellow
+    hazard[(pressure >= 3) & (pressure < 30)] = 2.0  # blue
+    hazard[pressure >= 30] = 3.0                       # red
+
     log_fn(f"FlowPy complete. Max z_delta={out_zdelta.max():.2f}, "
            f"cells reached={np.sum(out_counts)}")
+    log_fn(f"  Estimated: v_max={velocity.max():.1f} m/s, "
+           f"p_max={pressure.max():.1f} kPa")
+    n_red = np.sum(hazard >= 3)
+    n_blue = np.sum((hazard >= 2) & (hazard < 3))
+    n_yellow = np.sum((hazard >= 1) & (hazard < 2))
+    log_fn(f"  Hazard zones: red={n_red}, blue={n_blue}, yellow={n_yellow}")
 
     return {
         'zdelta': out_zdelta.astype(np.float32),
         'cellcounts': out_counts.astype(np.float32),
         'travelangle': out_fp_angle.astype(np.float32),
         'travellength': out_trav_len.astype(np.float32),
-        # Also keep full names for direct access
-        'z_delta': out_zdelta.astype(np.float32),
-        'flux': out_flux.astype(np.float32),
-        'count': out_counts,
-        'fp_travel_angle': out_fp_angle.astype(np.float32),
-        'sl_travel_angle': out_sl_angle.astype(np.float32),
-        'travel_length': out_trav_len.astype(np.float32),
+        'velocity': velocity.astype(np.float32),
+        'pressure': pressure.astype(np.float32),
+        'hazard': hazard,
     }
 
 
@@ -672,9 +689,13 @@ def run_fast_flowpy_pipeline(cfg, project_dir, log_fn=print):
         "cellcounts": "fast_cellCounts",
         "travellength": "fast_travelLengthMax",
         "travelangle": "fast_fpTravelAngleMax",
+        "velocity": "fast_velocity",
+        "pressure": "fast_pressure",
+        "hazard": "fast_hazard",
     }
     profile.update(dtype="float32", count=1, nodata=0, compress="lzw")
-    for name in ["zdelta", "cellcounts", "travellength", "travelangle"]:
+    for name in ["zdelta", "cellcounts", "travellength", "travelangle",
+                  "velocity", "pressure", "hazard"]:
         if name in results:
             out_path = out_dir / f"{name_map[name]}.tif"
             with rasterio.open(out_path, "w", **profile) as dst:
